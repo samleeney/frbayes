@@ -87,4 +87,4 @@ def plot_inputs(settings):
     os.makedirs("results", exist_ok=True)
     fig.savefig("results/inputs.pdf", bbox_inches="tight")
 
-    plt.show()
+    plt.close()
