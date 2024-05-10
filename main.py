@@ -6,6 +6,7 @@ import importlib
 
 importlib.reload(analysis)
 importlib.reload(data)
+importlib.reload(sample)
 
 
 def load_settings(yaml_file):
