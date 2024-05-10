@@ -1,5 +1,11 @@
 import yaml
-from frbayes.analysis import plot_inputs
+from frbayes import data
+from frbayes import analysis
+from frbayes import sample
+import importlib
+
+importlib.reload(analysis)
+importlib.reload(data)
 
 
 def load_settings(yaml_file):
@@ -9,10 +15,6 @@ def load_settings(yaml_file):
 
 settings = load_settings("settings.yaml")
 
-# Plot inputs
-plot_inputs(settings)
-
-#
-
-
-print("Done")
+data.preprocess_data(settings)
+analysis.plot_inputs(settings)
+sample
