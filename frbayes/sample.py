@@ -1,7 +1,9 @@
-from numpy import pi, exp, log
+from numpy import exp, log
 import numpy as np
 import pypolychord
 from pypolychord.priors import UniformPrior
+from frbayes.analysis import FRBAnalysis
+import yaml
 import os
 
 try:
@@ -9,9 +11,18 @@ try:
 except ImportError:
     pass
 
+
+# Load settings
+def load_settings(yaml_file):
+    with open(yaml_file, "r") as file:
+        return yaml.safe_load(file)
+
+
 # Load preprocessed data
-pulse_profile_snr = np.loadtxt("results/pulse_profile_snr.csv", delimiter=",")
-time_axis = np.loadtxt("results/time_axis.csv", delimiter=",")
+settings = load_settings("settings.yaml")
+analysis = FRBAnalysis(settings)
+pulse_profile_snr = analysis.pulse_profile_snr
+time_axis = analysis.time_axis
 data = {"pulse_profile_snr": pulse_profile_snr, "time_axis": time_axis}
 
 
@@ -48,10 +59,11 @@ def repeating_gaussian_prior(hypercube):
 
 
 # Run PolyChord with the repeating Gaussian model
-def run_polychord():
+def run_polychord(file_root):
     nGauss = 3
     nDims = nGauss * 3
     nDerived = 0
+
     paramnames = (
         [(f"amplitude_{i}", f"A_{i}") for i in range(nGauss)]
         + [(f"center_{i}", f"c_{i}") for i in range(nGauss)]
@@ -63,7 +75,7 @@ def run_polychord():
         nDims,
         nDerived=nDerived,
         prior=repeating_gaussian_prior,
-        file_root="repeating_gaussian",
+        file_root=file_root,
         nlive=100,
         do_clustering=True,
         read_resume=False,
@@ -71,4 +83,5 @@ def run_polychord():
     )
 
 
-run_polychord()
+if __name__ == "__main__":
+    run_polychord(file_root)
