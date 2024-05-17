@@ -124,7 +124,7 @@ class FRBAnalysis:
         chains = read_chains("chains/" + file_root, columns=paramnames_all)
 
         # Create 2D plot axes
-        fig, ax = make_2d_axes(paramnames_subset)
+        fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plotting...")
 
         # Plot the chains
