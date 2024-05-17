@@ -90,21 +90,26 @@ class FRBAnalysis:
     def process_chains(self, file_root):
         """Process chains with anesthetic and plot posterior distributions."""
         from anesthetic import read_chains, make_2d_axes
+        import matplotlib.pyplot as plt
+
+        # Enable LaTeX rendering in matplotlib
+        plt.rc("text", usetex=True)
+        plt.rc("font", family="serif")
 
         nDims = 42
 
-        # Define parameter names
+        # Define LaTeX-formatted parameter names
         paramnames_all = []
         for i in range(10):
-            paramnames_all.append(f"A_{i}")
+            paramnames_all.append(f"$A_{{{i}}}$")
         for i in range(10):
-            paramnames_all.append(f"lambda_{i}")
+            paramnames_all.append(f"$\\lambda_{{{i}}}$")
         for i in range(10):
-            paramnames_all.append(f"u_{i}")
+            paramnames_all.append(f"$u_{{{i}}}$")
         for i in range(10):
-            paramnames_all.append(f"sigma_pulse_{i}")
-        paramnames_all.append("Npulse")
-        paramnames_all.append("sigma")
+            paramnames_all.append(f"$\\sigma_{{\\text{{pulse}}, {i}}}$")
+        paramnames_all.append("$N_{\\text{pulse}}$")
+        paramnames_all.append("$\\sigma$")
 
         # Select a subset of parameter names to plot
         paramnames_subset = (
