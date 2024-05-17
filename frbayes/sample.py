@@ -1,10 +1,10 @@
-from numpy import exp, log
 import numpy as np
 import pypolychord
 from pypolychord.priors import UniformPrior
 from frbayes.analysis import FRBAnalysis
 import yaml
 import os
+from scipy.special import erfc
 
 try:
     from mpi4py import MPI
@@ -21,65 +21,89 @@ def load_settings(yaml_file):
 # Load preprocessed data
 settings = load_settings("settings.yaml")
 analysis = FRBAnalysis(settings)
-pulse_profile_snr = analysis.pulse_profile_snr
-time_axis = analysis.time_axis
-data = {"pulse_profile_snr": pulse_profile_snr, "time_axis": time_axis}
+pp = analysis.pulse_profile_snr
+t = analysis.time_axis
 
 
-# Define the repeating Gaussian model likelihood
-def repeating_gaussian_likelihood(theta):
-    """Repeating Gaussian Model Likelihood"""
-    nGauss = len(theta) // 3
-    amplitude, center, width = (
-        theta[:nGauss],
-        theta[nGauss : 2 * nGauss],
-        theta[2 * nGauss :],
+# Define the EMG model function
+def emg(t, A, lambda_, u, sigma):
+    # print(lambda_ / 2)
+    # print("--")
+    # print((2 * u + lambda_ * sigma**2 - 2 * t))
+    # print("--")
+    # print(np.exp((lambda_ / 2) * (2 * u + lambda_ * sigma**2 - 2 * t)))
+    # print(erfc((u + lambda_ * sigma**2 - t) / (np.sqrt(2) * sigma)))
+
+    return A * (
+        (lambda_ / 2)
+        * np.exp((lambda_ / 2) * (2 * u + lambda_ * sigma**2 - 2 * t))
+        * erfc((u + lambda_ * sigma**2 - t) / (np.sqrt(2) * sigma))
     )
-    model = sum(
-        a * exp(-((data["time_axis"] - c) ** 2) / (2 * w**2))
-        for a, c, w in zip(amplitude, center, width)
-    )
-    residuals = data["pulse_profile_snr"] - model
-    logL = -0.5 * np.sum(residuals**2)
+
+
+# Define the Gaussian model likelihood
+def loglikelihood(theta):
+    """Gaussian Model Likelihood"""
+    maxNpulse = 10
+    Npulse = int(theta[4 * maxNpulse])
+    sigma = theta[4 * maxNpulse + 1]
+    A = theta[0:maxNpulse]
+    lambda_ = theta[maxNpulse : 2 * maxNpulse]
+    u = theta[2 * maxNpulse : 3 * maxNpulse]
+    sigma_pulse = theta[3 * maxNpulse : 4 * maxNpulse]
+
+    # Assuming t and pp are globally defined
+    s = np.zeros((10, len(t)))
+
+    for i in range(maxNpulse):
+        if i < Npulse:
+            s[i] = emg(t, A[i], lambda_[i], u[i], sigma_pulse[i])
+        else:
+            s[i] = 0
+
+    # print(s)
+
+    model = s.sum(axis=0)
+
+    logL = (
+        np.log(1 / (sigma * np.sqrt(2 * np.pi)))
+        - 0.5 * ((pp - model) ** 2) / (sigma**2)
+    ).sum()
+
     return logL, []
 
 
-# Define a uniform prior
-def repeating_gaussian_prior(hypercube):
-    nGauss = len(hypercube) // 3
-    amplitude = [UniformPrior(0, 10)(hypercube[i]) for i in range(nGauss)]
-    center = [
-        UniformPrior(min(data["time_axis"]), max(data["time_axis"]))(
-            hypercube[i + nGauss]
-        )
-        for i in range(nGauss)
-    ]
-    width = [UniformPrior(0.001, 0.1)(hypercube[i + 2 * nGauss]) for i in range(nGauss)]
-    return amplitude + center + width
+def prior(hypercube):
+    N = 10
+
+    theta = np.zeros_like(hypercube)
+
+    # Populate each parameter array
+    for i in range(N):
+        theta[i] = UniformPrior(0, 20)(hypercube[i])  # A
+        theta[N + i] = UniformPrior(0, 1)(hypercube[N + i])  # lambda
+        theta[2 * N + i] = UniformPrior(0.001, 10)(hypercube[2 * N + i])  # u
+        theta[3 * N + i] = UniformPrior(0.001, 10)(hypercube[3 * N + i])  # sigma_pulse
+    theta[4 * N] = UniformPrior(1, 20)(hypercube[4 * N])  # Npulse
+    theta[4 * N + 1] = UniformPrior(0.001, 5)(hypercube[4 * N + 1])  # sigma
+
+    return theta
 
 
-# Run PolyChord with the repeating Gaussian model
+# Run PolyChord with the Gaussian model
 def run_polychord(file_root):
-    nGauss = 3
-    nDims = nGauss * 3
+    nDims = 42  # Amplitude, center, width
     nDerived = 0
 
-    paramnames = (
-        [(f"amplitude_{i}", f"A_{i}") for i in range(nGauss)]
-        + [(f"center_{i}", f"c_{i}") for i in range(nGauss)]
-        + [(f"width_{i}", f"w_{i}") for i in range(nGauss)]
-    )
-
     output = pypolychord.run(
-        repeating_gaussian_likelihood,
+        loglikelihood,
         nDims,
         nDerived=nDerived,
-        prior=repeating_gaussian_prior,
+        prior=prior,
         file_root=file_root,
-        nlive=100,
+        nlive=200,
         do_clustering=True,
         read_resume=False,
-        paramnames=paramnames,
     )
 
 

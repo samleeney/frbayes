@@ -87,13 +87,46 @@ class FRBAnalysis:
         fig.savefig("results/inputs.pdf", bbox_inches="tight")
         plt.close()
 
-    def process_chains(self, file_root, paramnames):
+    def process_chains(self, file_root):
         """Process chains with anesthetic and plot posterior distributions."""
         from anesthetic import read_chains, make_2d_axes
 
-        chains = read_chains("chains/" + file_root)
-        fig, ax = make_2d_axes(paramnames)
+        nDims = 42
+
+        # Define parameter names
+        paramnames_all = []
+        for i in range(10):
+            paramnames_all.append(f"A_{i}")
+        for i in range(10):
+            paramnames_all.append(f"lambda_{i}")
+        for i in range(10):
+            paramnames_all.append(f"u_{i}")
+        for i in range(10):
+            paramnames_all.append(f"sigma_pulse_{i}")
+        paramnames_all.append("Npulse")
+        paramnames_all.append("sigma")
+
+        # Select a subset of parameter names to plot
+        paramnames_subset = (
+            paramnames_all[0:2]
+            + paramnames_all[10:12]
+            + paramnames_all[20:22]
+            + paramnames_all[30:32]
+            + paramnames_all[40:]
+        )
+
+        # Load the chains
+        chains = read_chains("chains/" + file_root, columns=paramnames_all)
+
+        # Create 2D plot axes
+        fig, ax = make_2d_axes(paramnames_subset)
+        print("Plotting...")
+
+        # Plot the chains
         chains.plot_2d(ax)
+        print("Done!")
+
+        # Save the plot
         os.makedirs("results", exist_ok=True)
-        fig.savefig(f"{file_root}_posterior.pdf")
+        fig.savefig(f"results/{file_root}_posterior.pdf")
         plt.close()

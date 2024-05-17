@@ -31,18 +31,11 @@ def main():
     frb_analysis.plot_inputs()
 
     # Run PolyChord to generate the chains
-    file_root = "repeating_gaussian"
-    # sample.run_polychord(file_root)
+    file_root = "simple_gaussian"
+    sample.run_polychord(file_root)  # Assuming a model identifier is needed
 
     # Process chains with anesthetic
-    paramnames = (
-        [(f"amplitude_{i}", f"A_{i}") for i in range(3)]
-        + [(f"center_{i}", f"c_{i}") for i in range(3)]
-        + [(f"width_{i}", f"w_{i}") for i in range(3)]
-    )
-    print(paramnames)
-    jk
-    frb_analysis.process_chains(file_root, paramnames)
+    frb_analysis.process_chains(file_root)
 
 
 main()
