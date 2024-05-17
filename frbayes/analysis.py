@@ -117,7 +117,7 @@ class FRBAnalysis:
             + paramnames_all[10:12]
             + paramnames_all[20:22]
             + paramnames_all[30:32]
-            + paramnames_all[40:]
+            # + paramnames_all[40:]
         )
 
         # Load the chains

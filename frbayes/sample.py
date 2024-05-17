@@ -45,7 +45,7 @@ def emg(t, A, lambda_, u, sigma):
 def loglikelihood(theta):
     """Gaussian Model Likelihood"""
     maxNpulse = 10
-    Npulse = int(theta[4 * maxNpulse])
+    Npulse = theta[4 * maxNpulse]
     sigma = theta[4 * maxNpulse + 1]
     A = theta[0:maxNpulse]
     lambda_ = theta[maxNpulse : 2 * maxNpulse]
@@ -55,11 +55,11 @@ def loglikelihood(theta):
     # Assuming t and pp are globally defined
     s = np.zeros((10, len(t)))
 
-    for i in range(maxNpulse):
-        if i < Npulse:
-            s[i] = emg(t, A[i], lambda_[i], u[i], sigma_pulse[i])
+    for i in range(1, maxNpulse + 1):
+        if i <= Npulse:
+            s[i - 1] = emg(t, A[i - 1], lambda_[i - 1], u[i - 1], sigma_pulse[i - 1])
         else:
-            s[i] = 0
+            s[i - 1] = 0
 
     # print(s)
 
@@ -80,11 +80,11 @@ def prior(hypercube):
 
     # Populate each parameter array
     for i in range(N):
-        theta[i] = UniformPrior(0, 20)(hypercube[i])  # A
-        theta[N + i] = UniformPrior(0, 1)(hypercube[N + i])  # lambda
-        theta[2 * N + i] = UniformPrior(0.001, 10)(hypercube[2 * N + i])  # u
-        theta[3 * N + i] = UniformPrior(0.001, 10)(hypercube[3 * N + i])  # sigma_pulse
-    theta[4 * N] = UniformPrior(1, 20)(hypercube[4 * N])  # Npulse
+        theta[i] = UniformPrior(0, 100)(hypercube[i])  # A
+        theta[N + i] = UniformPrior(0, 10)(hypercube[N + i])  # lambda
+        theta[2 * N + i] = UniformPrior(0.001, 5)(hypercube[2 * N + i])  # u
+        theta[3 * N + i] = UniformPrior(0, 1)(hypercube[3 * N + i])  # sigma_pulse
+    theta[4 * N] = np.round(UniformPrior(1, 20)(hypercube[4 * N]))  # Npulse
     theta[4 * N + 1] = UniformPrior(0.001, 5)(hypercube[4 * N + 1])  # sigma
 
     return theta
