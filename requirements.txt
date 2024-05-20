@@ -4,3 +4,4 @@ h5py
 PyYAML
 SciencePlots
 anesthetic
+mpi4py

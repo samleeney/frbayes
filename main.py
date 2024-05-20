@@ -32,7 +32,7 @@ def main():
 
     # Run PolyChord to generate the chains
     file_root = "simple_gaussian"
-    # sample.run_polychord(file_root)  # Assuming a model identifier is needed
+    sample.run_polychord(file_root)  # Assuming a model identifier is needed
 
     # Process chains with anesthetic
     frb_analysis.process_chains(file_root)

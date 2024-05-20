@@ -107,7 +107,9 @@ class FRBAnalysis:
         for i in range(10):
             paramnames_all.append(f"$u_{{{i}}}$")
         for i in range(10):
-            paramnames_all.append(f"$\\sigma_{{\\text{{pulse}}, {i}}}$")
+            paramnames_all.append(f"$w_{{{i}}}$")
+        # for i in range(10):
+        #     paramnames_all.append(f"$\\sigma_{{\\text{{pulse}}, {i}}}$")
         paramnames_all.append("$N_{\\text{pulse}}$")
         paramnames_all.append("$\\sigma$")
 
@@ -117,7 +119,7 @@ class FRBAnalysis:
             + paramnames_all[10:12]
             + paramnames_all[20:22]
             + paramnames_all[30:32]
-            # + paramnames_all[40:]
+            + paramnames_all[40:]
         )
 
         # Load the chains
