@@ -23,16 +23,8 @@ settings = load_settings("settings.yaml")
 analysis = FRBAnalysis(settings)
 pp = analysis.pulse_profile_snr
 t = analysis.time_axis
-
+max_peaks = settings["max_peaks"]
 pp = pp + np.abs(np.min(pp))  # shift to only positive
-#
-import numpy as np
-import matplotlib.pyplot as plt
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.special import erfc
 
 
 # Define the EMG model function
@@ -44,53 +36,62 @@ def emg(t, A, tao, u, w):
     )
 
 
-def logemg(t, A, tao, u, w):
-    return (
-        np.log((A / (2 * tao)))
-        + ((u - t) / tao)
-        + ((2 * w**2) / tao**2)
-        + np.log(erfc((((u - t) * tao) + w**2) / (w * tao * np.sqrt(2))))
-    )
-
-
-max_peaks = settings["max_peaks"]
-# Define parameters for the EMG function
-A = 1  # Amplitude
-tao = 2  # scattering timescale
-u = 1  # Mean of the Gaussian component
-w = 0.1  # width
-
-
-# Generate a range of t values
-t = np.linspace(0, 5, 1000)
-
-# Compute the EMG function values
-emg_values = emg(t, A, tao, u, w)
-
-# Add noise to the EMG function values
-noise_level = 0.01
-noise = np.random.normal(0, noise_level, t.shape)
-pp1 = emg_values + noise
-
-
-# Define parameters for the EMG function
-A = 1.5  # Amplitude
-tao = 1.8  # scattering timescale
-u = 3  # Mean of the Gaussian component
-w = 0.2  # width
 #
+# import numpy as np
+# import matplotlib.pyplot as plt
 
 
-# Generate a range of t values
-t = np.linspace(0, 5, 1000)
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from scipy.special import erfc
 
-# Compute the EMG function values
-emg_values = emg(t, A, tao, u, w)
 
-# Add noise to the EMG function values
-noise_level = 0.01
-noise = np.random.normal(0, noise_level, t.shape)
-pp = pp1 + emg_values + noise
+# def logemg(t, A, tao, u, w):
+#     return (
+#         np.log((A / (2 * tao)))
+#         + ((u - t) / tao)
+#         + ((2 * w**2) / tao**2)
+#         + np.log(erfc((((u - t) * tao) + w**2) / (w * tao * np.sqrt(2))))
+#     )
+
+
+# # Define parameters for the EMG function
+# A = 1  # Amplitude
+# tao = 2  # scattering timescale
+# u = 1  # Mean of the Gaussian component
+# w = 0.1  # width
+
+
+# # Generate a range of t values
+# t = np.linspace(0, 5, 1000)
+
+# # Compute the EMG function values
+# emg_values = emg(t, A, tao, u, w)
+
+# # Add noise to the EMG function values
+# noise_level = 0.01
+# noise = np.random.normal(0, noise_level, t.shape)
+# pp1 = emg_values + noise
+
+
+# # Define parameters for the EMG function
+# A = 1.5  # Amplitude
+# tao = 1.8  # scattering timescale
+# u = 3  # Mean of the Gaussian component
+# w = 0.2  # width
+# #
+
+
+# # Generate a range of t values
+# t = np.linspace(0, 5, 1000)
+
+# # Compute the EMG function values
+# emg_values = emg(t, A, tao, u, w)
+
+# # Add noise to the EMG function values
+# noise_level = 0.01
+# noise = np.random.normal(0, noise_level, t.shape)
+# pp = pp1 + emg_values + noise
 
 # # # Plot the results
 # plt.figure(figsize=(10, 6))
@@ -154,7 +155,7 @@ def prior(hypercube):
             hypercube[(3 * max_peaks) + i]
         )  # w
         # theta[4 * N + i] = UniformPrior(0, 1)(hypercube[4 * N + i])  # sigma_pulse
-    theta[4 * max_peaks] = UniformPrior(0, max_peaks)(
+    theta[4 * max_peaks] = UniformPrior(1, max_peaks)(
         hypercube[4 * max_peaks]
     )  # Npulse
     theta[(4 * max_peaks) + 1] = LogUniformPrior(0.001, 1)(
