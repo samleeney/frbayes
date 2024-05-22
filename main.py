@@ -28,7 +28,7 @@ def main():
 
     # Plot inputs
     frb_analysis = analysis.FRBAnalysis(settings)
-    frb_analysis.plot_inputs()
+    # frb_analysis.plot_inputs()
 
     # Run PolyChord to generate the chains
     file_root = "simple_gaussian"

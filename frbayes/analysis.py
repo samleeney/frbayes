@@ -96,17 +96,18 @@ class FRBAnalysis:
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
 
-        nDims = 42
+        max_peaks = self.settings["max_peaks"]
+        nDims = max_peaks * 4 + 2
 
         # Define LaTeX-formatted parameter names
         paramnames_all = []
-        for i in range(10):
+        for i in range(max_peaks):
             paramnames_all.append(f"$A_{{{i}}}$")
-        for i in range(10):
+        for i in range(max_peaks):
             paramnames_all.append(f"$\\lambda_{{{i}}}$")
-        for i in range(10):
+        for i in range(max_peaks):
             paramnames_all.append(f"$u_{{{i}}}$")
-        for i in range(10):
+        for i in range(max_peaks):
             paramnames_all.append(f"$w_{{{i}}}$")
         # for i in range(10):
         #     paramnames_all.append(f"$\\sigma_{{\\text{{pulse}}, {i}}}$")
@@ -116,11 +117,12 @@ class FRBAnalysis:
         # Select a subset of parameter names to plot
         paramnames_subset = (
             paramnames_all[0:2]
-            + paramnames_all[10:12]
-            + paramnames_all[20:22]
-            + paramnames_all[30:32]
-            + paramnames_all[40:]
+            + paramnames_all[max_peaks : max_peaks + 2]
+            + paramnames_all[2 * max_peaks : max_peaks + 2]
+            + paramnames_all[3 * max_peaks : max_peaks + 2]
+            + paramnames_all[4 * max_peaks :]
         )
+        # paramnames_subset = paramnames_all
 
         # Load the chains
         chains = read_chains("chains/" + file_root, columns=paramnames_all)

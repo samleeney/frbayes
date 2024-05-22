@@ -1,6 +1,6 @@
 import numpy as np
 import pypolychord
-from pypolychord.priors import UniformPrior
+from pypolychord.priors import UniformPrior, LogUniformPrior
 from frbayes.analysis import FRBAnalysis
 import yaml
 import os
@@ -53,24 +53,44 @@ def logemg(t, A, tao, u, w):
     )
 
 
+max_peaks = settings["max_peaks"]
 # Define parameters for the EMG function
 A = 1  # Amplitude
 tao = 2  # scattering timescale
 u = 1  # Mean of the Gaussian component
 w = 0.1  # width
-sigma = 1  # Standard deviation of the Gaussian component
 
 
 # Generate a range of t values
-t = np.linspace(-5, 5, 1000)
+t = np.linspace(0, 5, 1000)
 
 # Compute the EMG function values
-emg_values = np.exp(logemg(t, A, tao, u, w))
+emg_values = emg(t, A, tao, u, w)
 
 # Add noise to the EMG function values
-noise_level = 0.1
+noise_level = 0.01
 noise = np.random.normal(0, noise_level, t.shape)
-pp = emg_values + noise
+pp1 = emg_values + noise
+
+
+# Define parameters for the EMG function
+A = 1.5  # Amplitude
+tao = 1.8  # scattering timescale
+u = 3  # Mean of the Gaussian component
+w = 0.2  # width
+#
+
+
+# Generate a range of t values
+t = np.linspace(0, 5, 1000)
+
+# Compute the EMG function values
+emg_values = emg(t, A, tao, u, w)
+
+# Add noise to the EMG function values
+noise_level = 0.01
+noise = np.random.normal(0, noise_level, t.shape)
+pp = pp1 + emg_values + noise
 
 # # # Plot the results
 # plt.figure(figsize=(10, 6))
@@ -87,58 +107,66 @@ pp = emg_values + noise
 # Define the Gaussian model likelihood
 def loglikelihood(theta):
     """Gaussian Model Likelihood"""
-    maxNpulse = 10
-    Npulse = theta[4 * maxNpulse]
-    sigma = theta[(4 * maxNpulse) + 1]
-    A = theta[0:maxNpulse]
-    tao = theta[maxNpulse : 2 * maxNpulse]
-    u = theta[2 * maxNpulse : 3 * maxNpulse]
-    w = theta[3 * maxNpulse : 4 * maxNpulse]
+    Npulse = theta[4 * max_peaks]
+    sigma = theta[(4 * max_peaks) + 1]
+    A = theta[0:max_peaks]
+    tao = theta[max_peaks : 2 * max_peaks]
+    u = theta[2 * max_peaks : 3 * max_peaks]
+    w = theta[3 * max_peaks : 4 * max_peaks]
     # print(A, tao, u, w, sigma, Npulse)
     # sigma_pulse = theta[4 * maxNpulse : 5 * maxNpulse]
 
     # Assuming t and pp are globally defined
-    s = np.zeros((10, len(t)))
+    s = np.zeros((max_peaks, len(t)))
 
-    for i in range(maxNpulse):
+    for i in range(max_peaks):
         if i < Npulse:
-            s[i] = logemg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
+            s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
         else:
-            s[i] = -np.inf
+            s[i] = 0 * np.ones(len(t))
 
     # print(s)
 
-    model = logsumexp(s, axis=0)
+    model = np.sum(s, axis=0)
 
     logL = (
         np.log(1 / (sigma * np.sqrt(2 * np.pi)))
-        - 0.5 * ((pp - np.exp(model)) ** 2) / (sigma**2)
+        - 0.5 * ((pp - model) ** 2) / (sigma**2)
     ).sum()
 
     return logL, []
 
 
 def prior(hypercube):
-    N = 10
 
     theta = np.zeros_like(hypercube)
 
     # Populate each parameter array
-    for i in range(N):
-        theta[i] = UniformPrior(0.001, 2)(hypercube[i])  # A
-        theta[N + i] = UniformPrior(0.001, 3)(hypercube[N + i])  # tao
-        theta[(2 * N) + i] = UniformPrior(0.001, 2)(hypercube[(2 * N) + i])  # u
-        theta[(3 * N) + i] = UniformPrior(0.001, 1)(hypercube[(3 * N) + i])  # w
+    for i in range(max_peaks):
+        theta[i] = UniformPrior(0.001, 10)(hypercube[i])  # A
+        theta[max_peaks + i] = UniformPrior(1, 5)(
+            hypercube[max_peaks + i]
+        )  # tao (keep greater than 1 to avoid overflow)
+        theta[(2 * max_peaks) + i] = UniformPrior(0.001, 10)(
+            hypercube[(2 * max_peaks) + i]
+        )  # u
+        theta[(3 * max_peaks) + i] = UniformPrior(0.001, 10)(
+            hypercube[(3 * max_peaks) + i]
+        )  # w
         # theta[4 * N + i] = UniformPrior(0, 1)(hypercube[4 * N + i])  # sigma_pulse
-    theta[4 * N] = UniformPrior(0, 3)(hypercube[4 * N])  # Npulse
-    theta[(4 * N) + 1] = UniformPrior(0.001, 1)(hypercube[(4 * N) + 1])  # sigma
+    theta[4 * max_peaks] = UniformPrior(0, max_peaks)(
+        hypercube[4 * max_peaks]
+    )  # Npulse
+    theta[(4 * max_peaks) + 1] = LogUniformPrior(0.001, 1)(
+        hypercube[(4 * max_peaks) + 1]
+    )  # sigma
 
     return theta
 
 
 # Run PolyChord with the Gaussian model
 def run_polychord(file_root):
-    nDims = 42  # Amplitude, center, width
+    nDims = max_peaks * 4 + 2  # Amplitude, center, width
     nDerived = 0
 
     output = pypolychord.run(
@@ -147,7 +175,7 @@ def run_polychord(file_root):
         nDerived=nDerived,
         prior=prior,
         file_root=file_root,
-        nlive=100,
+        nlive=50,
         do_clustering=True,
         read_resume=False,
     )
