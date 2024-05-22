@@ -115,11 +115,12 @@ class FRBAnalysis:
         paramnames_all.append("$\\sigma$")
 
         # Select a subset of parameter names to plot
+        ptd = 3  # peaks to display
         paramnames_subset = (
-            paramnames_all[0:2]
-            + paramnames_all[max_peaks : max_peaks + 2]
-            + paramnames_all[2 * max_peaks : max_peaks + 2]
-            + paramnames_all[3 * max_peaks : max_peaks + 2]
+            paramnames_all[0:ptd]
+            + paramnames_all[max_peaks : max_peaks + ptd]
+            + paramnames_all[2 * max_peaks : max_peaks + ptd]
+            + paramnames_all[3 * max_peaks : max_peaks + ptd]
             + paramnames_all[4 * max_peaks :]
         )
         # paramnames_subset = paramnames_all
