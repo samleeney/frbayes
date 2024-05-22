@@ -144,14 +144,14 @@ def prior(hypercube):
 
     # Populate each parameter array
     for i in range(max_peaks):
-        theta[i] = UniformPrior(0.001, 10)(hypercube[i])  # A
+        theta[i] = UniformPrior(0, 5)(hypercube[i])  # A
         theta[max_peaks + i] = UniformPrior(1, 5)(
             hypercube[max_peaks + i]
         )  # tao (keep greater than 1 to avoid overflow)
-        theta[(2 * max_peaks) + i] = UniformPrior(0.001, 10)(
+        theta[(2 * max_peaks) + i] = UniformPrior(0, 5)(
             hypercube[(2 * max_peaks) + i]
         )  # u
-        theta[(3 * max_peaks) + i] = UniformPrior(0.001, 10)(
+        theta[(3 * max_peaks) + i] = UniformPrior(0, 5)(
             hypercube[(3 * max_peaks) + i]
         )  # w
         # theta[4 * N + i] = UniformPrior(0, 1)(hypercube[4 * N + i])  # sigma_pulse
@@ -176,9 +176,8 @@ def run_polychord(file_root):
         nDerived=nDerived,
         prior=prior,
         file_root=file_root,
-        nlive=50,
         do_clustering=True,
-        read_resume=False,
+        read_resume=True,
     )
 
 

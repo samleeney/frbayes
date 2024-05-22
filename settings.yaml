@@ -4,3 +4,4 @@ original_time_res: 0.98304e-3  # s
 desired_freq_res: 3.125e6  # Hz
 desired_time_res: 7.86432e-3  # s
 max_peaks: 12
+nlive: 1050
