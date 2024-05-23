@@ -4,7 +4,7 @@ from pypolychord.priors import UniformPrior, LogUniformPrior
 from frbayes.analysis import FRBAnalysis
 import yaml
 import os
-from scipy.special import erfc, logsumexp
+from scipy.special import erfc
 from frbayes.models import emg
 
 try:
@@ -114,6 +114,7 @@ def loglikelihood(theta):
 
     for i in range(max_peaks):
         if i < Npulse:
+
             s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
         else:
             s[i] = 0 * np.ones(len(t))

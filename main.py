@@ -1,5 +1,5 @@
 import yaml
-from frbayes import data, analysis, sample
+from frbayes import data, analysis, sample, models
 import importlib
 import os
 
@@ -7,6 +7,7 @@ import os
 importlib.reload(analysis)
 importlib.reload(data)
 importlib.reload(sample)
+importlib.reload(models)
 
 
 def load_settings(yaml_file):
@@ -35,7 +36,8 @@ def main():
     # sample.run_polychord(file_root)  # Assuming a model identifier is needed
 
     # Process chains with anesthetic
-    frb_analysis.process_chains()
+    # frb_analysis.process_chains()
+    frb_analysis.functional_posteriors()
 
 
 main()

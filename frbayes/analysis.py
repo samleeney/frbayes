@@ -191,21 +191,34 @@ class FRBAnalysis:
         plt.close()
         print("Done!")
 
-    def functional_posteriors(self)
+    def functional_posteriors(self):
         from fgivenx import plot_contours
+        from frbayes.models import emg
 
-        # Define a simple linear model
-        def f(x, theta):
-            m, c = theta
-            return m * x + c
+        def emgfgx(t, theta):
 
-        # Define x range
-        x = np.linspace(-2, 2, 100)
+            Npulse = theta[4 * self.max_peaks]
+            sigma = theta[(4 * self.max_peaks) + 1]
+            A = theta[0 : self.max_peaks]
+            tao = theta[self.max_peaks : 2 * self.max_peaks]
+            u = theta[2 * self.max_peaks : 3 * self.max_peaks]
+            w = theta[3 * self.max_peaks : 4 * self.max_peaks]
+            s = np.zeros((self.max_peaks, len(t)))
 
-        # Create the plot
+            for i in range(self.max_peaks):
+                if i < Npulse:
+
+                    s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
+                else:
+                    s[i] = 0 * np.ones(len(t))
+
+            return np.sum(s, axis=0)
+
         fig, ax = plt.subplots()
-        plot_contours(f, self.time_axis, self.chains, ax)
-        ax.set_xlabel('t')
-        ax.set_ylabel('SNR')
+        print("Plotting contours...")
+        plot_contours(emgfgx, self.time_axis, self.chains, ax)
+        ax.set_xlabel("t")
+        ax.set_ylabel("SNR")
         plt.savefig(f"results/{self.file_root}_f_posterior.pdf")
         plt.close()
+        print("Done!")
