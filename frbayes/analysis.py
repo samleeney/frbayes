@@ -147,7 +147,9 @@ class FRBAnalysis:
         )
 
         # Load the chains
+        print(np.shape(self.paramnames_all))
         chains = read_chains("chains/" + file_root, columns=self.paramnames_all)
+        jk
 
         # Create 2D plot axes ss
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
@@ -157,6 +159,7 @@ class FRBAnalysis:
         fig.savefig(f"results/{file_root}_ss_posterior.pdf")
         plt.close()
         print("Done!")
+        jk
 
         # Create 2D plot axes for amplitude
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
