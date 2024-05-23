@@ -15,6 +15,23 @@ class FRBAnalysis:
         self.settings = settings
         self.pulse_profile_snr, self.time_axis = preprocess_data(settings)
 
+        self.max_peaks = self.settings["max_peaks"]
+
+        # Define LaTeX-formatted parameter names
+        paramnames_all = []
+        for i in range(self.max_peaks):
+            paramnames_all.append(r"$A_{{{}}}$".format(i))
+        for i in range(self.max_peaks):
+            paramnames_all.append(r"$\tau_{{{}}}$".format(i))
+        for i in range(self.max_peaks):
+            paramnames_all.append(r"$u_{{{}}}$".format(i))
+        for i in range(self.max_peaks):
+            paramnames_all.append(r"$w_{{{}}}$".format(i))
+
+        paramnames_all.append(r"$N_{\text{pulse}}$")
+        paramnames_all.append(r"$\sigma$")
+        self.paramnames_all = paramnames_all
+
     def plot_inputs(self):
         """Plot inputs including the waterfall and pulse profile SNR."""
         # Load data from the HDF5 file
@@ -96,45 +113,79 @@ class FRBAnalysis:
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
 
-        max_peaks = self.settings["max_peaks"]
-        nDims = max_peaks * 4 + 2
-
-        # Define LaTeX-formatted parameter names
-        paramnames_all = []
-        for i in range(max_peaks):
-            paramnames_all.append(r"$A_{{{}}}$".format(i))
-        for i in range(max_peaks):
-            paramnames_all.append(r"$\tau_{{{}}}$".format(i))
-        for i in range(max_peaks):
-            paramnames_all.append(r"$u_{{{}}}$".format(i))
-        for i in range(max_peaks):
-            paramnames_all.append(r"$w_{{{}}}$".format(i))
-
-        paramnames_all.append(r"$N_{\text{pulse}}$")
-        paramnames_all.append(r"$\sigma$")
-
         # Select a subset of parameter names to plot
         ptd = 3  # peaks to display
         paramnames_subset = (
-            paramnames_all[0:ptd]
-            + paramnames_all[max_peaks : max_peaks + ptd]
-            + paramnames_all[2 * max_peaks : 2 * max_peaks + ptd]
-            + paramnames_all[3 * max_peaks : 3 * max_peaks + ptd]
-            + paramnames_all[4 * max_peaks :]
+            self.paramnames_all[0:ptd]
+            + self.paramnames_all[self.max_peaks : self.max_peaks + ptd]
+            + self.paramnames_all[2 * self.max_peaks : 2 * self.max_peaks + ptd]
+            + self.paramnames_all[3 * self.max_peaks : 3 * self.max_peaks + ptd]
+            + self.paramnames_all[4 * self.max_peaks :]
+        )
+
+        paramnames_Npulse = [self.paramnames_all[4 * self.max_peaks]]
+        paramnames_sigma = [self.paramnames_all[(4 * self.max_peaks) + 1]]
+        paramnames_amp = (
+            self.paramnames_all[0 : self.max_peaks]
+            + paramnames_Npulse
+            + paramnames_sigma
+        )
+        paramnames_tao = (
+            self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
+            + paramnames_Npulse
+            + paramnames_sigma
+        )
+        paramnames_u = (
+            self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
+            + paramnames_Npulse
+            + paramnames_sigma
+        )
+        paramnames_w = (
+            self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
+            + paramnames_Npulse
+            + paramnames_sigma
         )
 
         # Load the chains
-        chains = read_chains("chains/" + file_root, columns=paramnames_all)
+        chains = read_chains("chains/" + file_root, columns=self.paramnames_all)
 
-        # Create 2D plot axes
+        # Create 2D plot axes ss
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
-        print("Plotting...")
-
-        # Plot the chains
+        print("Plot subset...")
         chains.plot_2d(ax)
+        os.makedirs("results", exist_ok=True)
+        fig.savefig(f"results/{file_root}_ss_posterior.pdf")
+        plt.close()
         print("Done!")
 
-        # Save the plot
-        os.makedirs("results", exist_ok=True)
-        fig.savefig(f"results/{file_root}_posterior.pdf")
+        # Create 2D plot axes for amplitude
+        fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
+        print("Plot amplitude...")
+        chains.plot_2d(ax)
+        fig.savefig(f"results/{file_root}_amp_posterior.pdf")
         plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for tao
+        fig, ax = make_2d_axes(paramnames_tao, figsize=(6, 6))
+        print("Plot tao...")
+        chains.plot_2d(ax)
+        fig.savefig(f"results/{file_root}_tao_posterior.pdf")
+        plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for u
+        fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
+        print("Plot u...")
+        chains.plot_2d(ax)
+        fig.savefig(f"results/{file_root}_u_posterior.pdf")
+        plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for w
+        fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
+        print("Plot w...")
+        chains.plot_2d(ax)
+        fig.savefig(f"results/{file_root}_w_posterior.pdf")
+        plt.close()
+        print("Done!")

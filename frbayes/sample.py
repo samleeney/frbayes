@@ -108,8 +108,8 @@ def emg(t, A, tao, u, w):
 # Define the Gaussian model likelihood
 def loglikelihood(theta):
     """Gaussian Model Likelihood"""
-    Npulse = theta[4 * max_peaks]
-    sigma = theta[(4 * max_peaks) + 1]
+    # Npulse = theta[4 * max_peaks]
+    sigma = theta[(4 * max_peaks)]
     A = theta[0:max_peaks]
     tao = theta[max_peaks : 2 * max_peaks]
     u = theta[2 * max_peaks : 3 * max_peaks]
@@ -121,10 +121,13 @@ def loglikelihood(theta):
     s = np.zeros((max_peaks, len(t)))
 
     for i in range(max_peaks):
-        if i < Npulse:
-            s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
-        else:
-            s[i] = 0 * np.ones(len(t))
+        s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
+    # #
+    # for i in range(max_peaks):
+    #     if i < Npulse:
+    #         s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
+    #     else:
+    #         s[i] = 0 * np.ones(len(t))
 
     # print(s)
 
@@ -154,12 +157,11 @@ def prior(hypercube):
         theta[(3 * max_peaks) + i] = UniformPrior(0, 5)(
             hypercube[(3 * max_peaks) + i]
         )  # w
-        # theta[4 * N + i] = UniformPrior(0, 1)(hypercube[4 * N + i])  # sigma_pulse
-    theta[4 * max_peaks] = UniformPrior(1, max_peaks)(
-        hypercube[4 * max_peaks]
-    )  # Npulse
-    theta[(4 * max_peaks) + 1] = LogUniformPrior(0.001, 1)(
-        hypercube[(4 * max_peaks) + 1]
+
+    # theta[4 * max_peaks] = UniformPrior(1, max_peaks)(hypercube[4 * max_peaks]) #
+    # )  # Npulse
+    theta[(4 * max_peaks)] = LogUniformPrior(0.001, 1)(
+        hypercube[(4 * max_peaks)]
     )  # sigma
 
     return theta
@@ -167,7 +169,7 @@ def prior(hypercube):
 
 # Run PolyChord with the Gaussian model
 def run_polychord(file_root):
-    nDims = max_peaks * 4 + 2  # Amplitude, center, width
+    nDims = max_peaks * 4 + 1  # Amplitude, center, width
     nDerived = 0
 
     output = pypolychord.run(
