@@ -5,6 +5,7 @@ import os
 from .utils import downsample, calculate_snr
 from .data import preprocess_data
 import scienceplots
+from anesthetic import read_chains, make_2d_axes
 
 # Activate the "science" style
 plt.style.use("science")
@@ -14,7 +15,7 @@ class FRBAnalysis:
     def __init__(self, settings):
         self.settings = settings
         self.pulse_profile_snr, self.time_axis = preprocess_data(settings)
-
+        self.file_root = settings["file_root"]
         self.max_peaks = self.settings["max_peaks"]
 
         # Define LaTeX-formatted parameter names
@@ -31,6 +32,11 @@ class FRBAnalysis:
         paramnames_all.append(r"$N_{\text{pulse}}$")
         paramnames_all.append(r"$\sigma$")
         self.paramnames_all = paramnames_all
+
+        # Load the chains
+        self.chains = read_chains(
+            "chains/" + self.file_root, columns=self.paramnames_all
+        )
 
     def plot_inputs(self):
         """Plot inputs including the waterfall and pulse profile SNR."""
@@ -104,11 +110,8 @@ class FRBAnalysis:
         fig.savefig("results/inputs.pdf", bbox_inches="tight")
         plt.close()
 
-    def process_chains(self, file_root):
+    def process_chains(self):
         """Process chains with anesthetic and plot posterior distributions."""
-        from anesthetic import read_chains, make_2d_axes
-        import matplotlib.pyplot as plt
-
         # Enable LaTeX rendering in matplotlib
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
@@ -146,17 +149,12 @@ class FRBAnalysis:
             + paramnames_sigma
         )
 
-        # Load the chains
-        print(np.shape(self.paramnames_all))
-        chains = read_chains("chains/" + file_root, columns=self.paramnames_all)
-        jk
-
         # Create 2D plot axes ss
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
-        chains.plot_2d(ax)
+        self.chains.plot_2d(ax)
         os.makedirs("results", exist_ok=True)
-        fig.savefig(f"results/{file_root}_ss_posterior.pdf")
+        fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
         plt.close()
         print("Done!")
         jk
@@ -164,31 +162,31 @@ class FRBAnalysis:
         # Create 2D plot axes for amplitude
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
         print("Plot amplitude...")
-        chains.plot_2d(ax)
-        fig.savefig(f"results/{file_root}_amp_posterior.pdf")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_amp_posterior.pdf")
         plt.close()
         print("Done!")
 
         # Create 2D plot axes for tao
         fig, ax = make_2d_axes(paramnames_tao, figsize=(6, 6))
         print("Plot tao...")
-        chains.plot_2d(ax)
-        fig.savefig(f"results/{file_root}_tao_posterior.pdf")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_tao_posterior.pdf")
         plt.close()
         print("Done!")
 
         # Create 2D plot axes for u
         fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
         print("Plot u...")
-        chains.plot_2d(ax)
-        fig.savefig(f"results/{file_root}_u_posterior.pdf")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_u_posterior.pdf")
         plt.close()
         print("Done!")
 
         # Create 2D plot axes for w
         fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
         print("Plot w...")
-        chains.plot_2d(ax)
-        fig.savefig(f"results/{file_root}_w_posterior.pdf")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
         plt.close()
         print("Done!")

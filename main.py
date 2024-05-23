@@ -35,7 +35,7 @@ def main():
     # sample.run_polychord(file_root)  # Assuming a model identifier is needed
 
     # Process chains with anesthetic
-    frb_analysis.process_chains(file_root)
+    frb_analysis.process_chains()
 
 
 main()
