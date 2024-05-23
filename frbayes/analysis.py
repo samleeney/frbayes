@@ -190,3 +190,22 @@ class FRBAnalysis:
         fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
         plt.close()
         print("Done!")
+
+    def functional_posteriors(self)
+        from fgivenx import plot_contours
+
+        # Define a simple linear model
+        def f(x, theta):
+            m, c = theta
+            return m * x + c
+
+        # Define x range
+        x = np.linspace(-2, 2, 100)
+
+        # Create the plot
+        fig, ax = plt.subplots()
+        plot_contours(f, self.time_axis, self.chains, ax)
+        ax.set_xlabel('t')
+        ax.set_ylabel('SNR')
+        plt.savefig(f"results/{self.file_root}_f_posterior.pdf")
+        plt.close()

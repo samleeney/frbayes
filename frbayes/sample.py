@@ -5,6 +5,7 @@ from frbayes.analysis import FRBAnalysis
 import yaml
 import os
 from scipy.special import erfc, logsumexp
+from frbayes.models import emg
 
 try:
     from mpi4py import MPI
@@ -25,15 +26,6 @@ pp = analysis.pulse_profile_snr
 t = analysis.time_axis
 max_peaks = settings["max_peaks"]
 pp = pp + np.abs(np.min(pp))  # shift to only positive
-
-
-# Define the EMG model function
-def emg(t, A, tao, u, w):
-    return (
-        (A / (2 * tao))
-        * np.exp(((u - t) / tao) + ((2 * w**2) / tao**2))
-        * erfc((((u - t) * tao) + w**2) / (w * tao * np.sqrt(2)))
-    )
 
 
 #
