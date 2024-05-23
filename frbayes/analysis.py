@@ -208,7 +208,7 @@ class FRBAnalysis:
             for i in range(self.max_peaks):
                 if i < Npulse:
 
-                    s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
+                    s[i] = emg(t, A[i], tao[i], u[i], w[i])
                 else:
                     s[i] = 0 * np.ones(len(t))
 
@@ -216,9 +216,13 @@ class FRBAnalysis:
 
         fig, ax = plt.subplots()
         print("Plotting contours...")
-        plot_contours(emgfgx, self.time_axis, self.chains, ax)
+        plot_contours(
+            emgfgx, self.time_axis, self.chains, ax, weights=self.chains.get_weights()
+        )
         ax.set_xlabel("t")
         ax.set_ylabel("SNR")
         plt.savefig(f"results/{self.file_root}_f_posterior.pdf")
-        plt.close()
+        plt.ylim((0, 3))
+        plt.show()
+        # plt.close()
         print("Done!")
