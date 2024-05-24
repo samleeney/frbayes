@@ -192,11 +192,10 @@ class FRBAnalysis:
         print("Done!")
 
     def functional_posteriors(self):
-        from fgivenx import plot_contours
+        from fgivenx import plot_contours, plot_lines
         from frbayes.models import emg
 
         def emgfgx(t, theta):
-
             Npulse = theta[4 * self.max_peaks]
             sigma = theta[(4 * self.max_peaks) + 1]
             A = theta[0 : self.max_peaks]
@@ -207,22 +206,44 @@ class FRBAnalysis:
 
             for i in range(self.max_peaks):
                 if i < Npulse:
-
                     s[i] = emg(t, A[i], tao[i], u[i], w[i])
                 else:
                     s[i] = 0 * np.ones(len(t))
 
             return np.sum(s, axis=0)
 
-        fig, ax = plt.subplots()
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True, sharey=True)
+
+        # Plotting contours
         print("Plotting contours...")
-        plot_contours(
-            emgfgx, self.time_axis, self.chains, ax, weights=self.chains.get_weights()
+        contour = plot_contours(
+            emgfgx,
+            self.time_axis,
+            self.chains,
+            ax1,
+            weights=self.chains.get_weights(),
+            colors=plt.cm.Blues_r,
         )
-        ax.set_xlabel("t")
-        ax.set_ylabel("SNR")
-        plt.savefig(f"results/{self.file_root}_f_posterior.pdf")
+        ax1.set_ylabel("SNR")
+
+        # Plotting lines
+        print("Plotting lines...")
+        lines = plot_lines(
+            emgfgx,
+            self.time_axis,
+            self.chains,
+            ax2,
+            weights=self.chains.get_weights(),
+            color="b",
+        )
+        ax2.set_xlabel("t")
+        ax2.set_ylabel("SNR")
+
+        # Only show the shared y-label once
+        fig.text(0.04, 0.5, "SNR", va="center", rotation="vertical")
+        fig.tight_layout(rect=[0.05, 0, 1, 1])
+
+        plt.savefig(f"results/{self.file_root}_f_posterior_combined.pdf")
         plt.ylim((0, 3))
-        plt.show()
-        # plt.close()
+        plt.close()
         print("Done!")
