@@ -6,4 +6,4 @@ desired_time_res: 7.86432e-3  # s
 max_peaks: 12
 nlive: 1050
 file_root: "simple_gaussian"
-npulse_free: "True"
+Npulse: "free" # set to int or "free"

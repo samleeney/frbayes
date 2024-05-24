@@ -127,27 +127,27 @@ class FRBAnalysis:
             + self.paramnames_all[4 * self.max_peaks :]
         )
 
-        paramnames_Npulse = [self.paramnames_all[4 * self.max_peaks]]
-        paramnames_sigma = [self.paramnames_all[(4 * self.max_peaks) + 1]]
+        paramnames_Npulse = [self.paramnames_all[4 * self.max_peaks + 1]]
+        paramnames_sigma = [self.paramnames_all[4 * self.max_peaks]]
         paramnames_amp = (
             self.paramnames_all[0 : self.max_peaks]
-            + paramnames_Npulse
             + paramnames_sigma
+            + paramnames_Npulse
         )
         paramnames_tao = (
             self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
-            + paramnames_Npulse
             + paramnames_sigma
+            + paramnames_Npulse
         )
         paramnames_u = (
             self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
-            + paramnames_Npulse
             + paramnames_sigma
+            + paramnames_Npulse
         )
         paramnames_w = (
             self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
-            + paramnames_Npulse
             + paramnames_sigma
+            + paramnames_Npulse
         )
 
         # Create 2D plot axes ss

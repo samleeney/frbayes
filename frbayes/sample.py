@@ -5,7 +5,7 @@ from frbayes.analysis import FRBAnalysis
 import yaml
 import os
 from scipy.special import erfc
-from frbayes.models import emg
+from frbayes.models import emg, emg_npf
 from frbayes.utils import load_settings
 
 try:
@@ -20,14 +20,19 @@ pp = analysis.pulse_profile_snr
 t = analysis.time_axis
 max_peaks = settings["max_peaks"]
 pp = pp + np.abs(np.min(pp))  # shift to only positive
+#
+if settings["Npulse"] == "free":
+    emg_ = emg
+else:
+    emg_ = emg_npf
 
 
 # Define the Gaussian model likelihood
 def loglikelihood(theta):
     """Gaussian Model Likelihood"""
 
-    model = emg(t, theta)
-    sigma = theta[(4 * max_peaks) + 1]
+    model = emg_(t, theta)
+    sigma = theta[(4 * max_peaks)]
 
     logL = (
         np.log(1 / (sigma * np.sqrt(2 * np.pi)))
@@ -54,19 +59,28 @@ def prior(hypercube):
             hypercube[(3 * max_peaks) + i]
         )  # w
         # theta[4 * N + i] = UniformPrior(0, 1)(hypercube[4 * N + i])  # sigma_pulse
-    theta[4 * max_peaks] = UniformPrior(1, max_peaks)(
-        hypercube[4 * max_peaks]
-    )  # Npulse
-    theta[(4 * max_peaks) + 1] = LogUniformPrior(0.001, 1)(
-        hypercube[(4 * max_peaks) + 1]
+
+    theta[(4 * max_peaks)] = LogUniformPrior(0.001, 1)(
+        hypercube[(4 * max_peaks)]
     )  # sigma
+    if settings["Npulse"] == "free":
+        theta[4 * max_peaks + 1] = UniformPrior(1, max_peaks)(
+            hypercube[4 * max_peaks + 1]
+        )  # Npulse
 
     return theta
 
 
 # Run PolyChord with the Gaussian model
 def run_polychord(file_root):
-    nDims = max_peaks * 4 + 2  # Amplitude, center, width
+    settings = load_settings()
+    if settings["Npulse"] == "free":
+        nDims = max_peaks * 4 + 2  # Amplitude, center, width
+        print("Npulse is a free parameter")
+    else:
+        nDims = max_peaks * 4 + 1
+        print("Npulse is fixed to " + str(settings["Npulse"]))
+
     nDerived = 0
 
     output = pypolychord.run(
