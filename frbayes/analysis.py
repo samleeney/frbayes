@@ -6,6 +6,7 @@ from .utils import downsample, calculate_snr
 from .data import preprocess_data
 import scienceplots
 from anesthetic import read_chains, make_2d_axes
+from frbayes.utils import load_settings
 
 # Activate the "science" style
 plt.style.use("science")
@@ -13,7 +14,7 @@ plt.style.use("science")
 
 class FRBAnalysis:
     def __init__(self, settings):
-        self.settings = settings
+        self.settings = load_settings()
         self.pulse_profile_snr, self.time_axis = preprocess_data(settings)
         self.file_root = settings["file_root"]
         self.max_peaks = self.settings["max_peaks"]
@@ -32,11 +33,6 @@ class FRBAnalysis:
         paramnames_all.append(r"$N_{\text{pulse}}$")
         paramnames_all.append(r"$\sigma$")
         self.paramnames_all = paramnames_all
-
-        # Load the chains
-        self.chains = read_chains(
-            "chains/" + self.file_root, columns=self.paramnames_all
-        )
 
     def plot_inputs(self):
         """Plot inputs including the waterfall and pulse profile SNR."""
@@ -116,6 +112,11 @@ class FRBAnalysis:
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
 
+        # Load the chains
+        self.chains = read_chains(
+            "chains/" + self.file_root, columns=self.paramnames_all
+        )
+
         # Select a subset of parameter names to plot
         ptd = 3  # peaks to display
         paramnames_subset = (
@@ -157,7 +158,6 @@ class FRBAnalysis:
         fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
         plt.close()
         print("Done!")
-        jk
 
         # Create 2D plot axes for amplitude
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
@@ -195,29 +195,17 @@ class FRBAnalysis:
         from fgivenx import plot_contours, plot_lines
         from frbayes.models import emg
 
-        def emgfgx(t, theta):
-            Npulse = theta[4 * self.max_peaks]
-            sigma = theta[(4 * self.max_peaks) + 1]
-            A = theta[0 : self.max_peaks]
-            tao = theta[self.max_peaks : 2 * self.max_peaks]
-            u = theta[2 * self.max_peaks : 3 * self.max_peaks]
-            w = theta[3 * self.max_peaks : 4 * self.max_peaks]
-            s = np.zeros((self.max_peaks, len(t)))
-
-            for i in range(self.max_peaks):
-                if i < Npulse:
-                    s[i] = emg(t, A[i], tao[i], u[i], w[i])
-                else:
-                    s[i] = 0 * np.ones(len(t))
-
-            return np.sum(s, axis=0)
+        # Load the chains
+        self.chains = read_chains(
+            "chains/" + self.file_root, columns=self.paramnames_all
+        )
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True, sharey=True)
 
         # Plotting contours
         print("Plotting contours...")
         contour = plot_contours(
-            emgfgx,
+            emg,
             self.time_axis,
             self.chains,
             ax1,
@@ -229,7 +217,7 @@ class FRBAnalysis:
         # Plotting lines
         print("Plotting lines...")
         lines = plot_lines(
-            emgfgx,
+            emg,
             self.time_axis,
             self.chains,
             ax2,

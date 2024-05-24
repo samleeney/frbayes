@@ -6,21 +6,15 @@ import yaml
 import os
 from scipy.special import erfc
 from frbayes.models import emg
+from frbayes.utils import load_settings
 
 try:
     from mpi4py import MPI
 except ImportError:
     pass
 
-
-# Load settings
-def load_settings(yaml_file):
-    with open(yaml_file, "r") as file:
-        return yaml.safe_load(file)
-
-
 # Load preprocessed data
-settings = load_settings("settings.yaml")
+settings = load_settings()
 analysis = FRBAnalysis(settings)
 pp = analysis.pulse_profile_snr
 t = analysis.time_axis
@@ -31,28 +25,9 @@ pp = pp + np.abs(np.min(pp))  # shift to only positive
 # Define the Gaussian model likelihood
 def loglikelihood(theta):
     """Gaussian Model Likelihood"""
-    Npulse = theta[4 * max_peaks]
+
+    model = emg(t, theta)
     sigma = theta[(4 * max_peaks) + 1]
-    A = theta[0:max_peaks]
-    tao = theta[max_peaks : 2 * max_peaks]
-    u = theta[2 * max_peaks : 3 * max_peaks]
-    w = theta[3 * max_peaks : 4 * max_peaks]
-    # print(A, tao, u, w, sigma, Npulse)
-    # sigma_pulse = theta[4 * maxNpulse : 5 * maxNpulse]
-
-    # Assuming t and pp are globally defined
-    s = np.zeros((max_peaks, len(t)))
-
-    for i in range(max_peaks):
-        if i < Npulse:
-
-            s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
-        else:
-            s[i] = 0 * np.ones(len(t))
-
-    # print(s)
-
-    model = np.sum(s, axis=0)
 
     logL = (
         np.log(1 / (sigma * np.sqrt(2 * np.pi)))
