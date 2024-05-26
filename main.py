@@ -1,18 +1,24 @@
-from frbayes import data, analysis, sample, models
+from frbayes import data, analysis
+from frbayes.sample import Sample
 from frbayes.utils import load_settings
 import importlib
 import os
+import yaml
 
 # Reload the modules to ensure changes are reflected
 importlib.reload(analysis)
 importlib.reload(data)
-importlib.reload(sample)
-importlib.reload(models)
 
 
 def main():
     # Load settings
     settings = load_settings()
+
+    slurm_job_id = os.environ.get("SLURM_ARRAY_TASK_ID")
+    print("slurm_job_id is " + str(slurm_job_id))
+    settings["Npulse"] = int(slurm_job_id)
+    settings["file_root"] = "npulse=" + str(settings["Npulse"]) + "_"
+    print(f"Running job {slurm_job_id} with Npulse = {settings['Npulse']}")
 
     # Ensure results directory exists
     results_dir = "results"
@@ -26,8 +32,7 @@ def main():
     frb_analysis.plot_inputs()
 
     # Run PolyChord to generate the chains
-    file_root = "simple_gaussian"
-    sample.run_polychord(file_root)  # Assuming a model identifier is needed
+    Sample(settings).run_polychord()  # Assuming a model identifier is needed
 
     # Process chains with anesthetic
     frb_analysis.process_chains()
