@@ -86,7 +86,6 @@ class Sample:
         output = pypolychord.run(
             self.loglikelihood,
             nDims,
-            nlive=self.settings["nlive"],
             nDerived=nDerived,
             prior=self.prior,
             file_root=self.settings["file_root"],
