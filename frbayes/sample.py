@@ -31,7 +31,7 @@ class Sample:
     def loglikelihood(self, theta):
         """Gaussian Model Likelihood"""
         model = self.emg_model(self.t, theta)
-        sigma = theta[(4 * self.max_peaks)]
+        sigma = theta[(4 * self.settings["max_peaks"])]
 
         logL = (
             np.log(1 / (sigma * np.sqrt(2 * np.pi)))
@@ -45,29 +45,27 @@ class Sample:
 
         # Populate each parameter array
         # Populate each parameter array
-        if self.settings["Npulse"] == "free":
-            ln = self.max_peaks
-        else:
-            ln = self.settings["Npulse"]
 
-        for i in range(ln):
+        for i in range(self.settings["max_peaks"]):
             theta[i] = UniformPrior(0, 5)(hypercube[i])  # A
-            theta[self.max_peaks + i] = UniformPrior(1, 5)(
-                hypercube[self.max_peaks + i]
+            theta[self.settings["max_peaks"] + i] = UniformPrior(1, 5)(
+                hypercube[self.settings["max_peaks"] + i]
             )  # tao (keep greater than 1 to avoid overflow)
-            theta[(2 * self.max_peaks) + i] = UniformPrior(0, 5)(
-                hypercube[(2 * self.max_peaks) + i]
+            theta[(2 * self.settings["max_peaks"]) + i] = UniformPrior(0, 5)(
+                hypercube[(2 * self.settings["max_peaks"]) + i]
             )  # u
-            theta[(3 * self.max_peaks) + i] = UniformPrior(0, 5)(
-                hypercube[(3 * self.max_peaks) + i]
+            theta[(3 * self.settings["max_peaks"]) + i] = UniformPrior(0, 5)(
+                hypercube[(3 * self.settings["max_peaks"]) + i]
             )  # w
 
-        theta[(4 * self.max_peaks)] = LogUniformPrior(0.001, 1)(
-            hypercube[(4 * self.max_peaks)]
+        theta[(4 * self.settings["max_peaks"])] = LogUniformPrior(0.001, 1)(
+            hypercube[(4 * self.settings["max_peaks"])]
         )  # sigma
         if self.settings["Npulse"] == "free":
-            theta[4 * self.max_peaks + 1] = UniformPrior(1, self.max_peaks)(
-                hypercube[4 * self.max_peaks + 1]
+            theta[4 * self.settings["max_peaks"] + 1] = UniformPrior(
+                1, self.settings["max_peaks"]
+            )(
+                hypercube[4 * self.settings["max_peaks"] + 1]
             )  # Npulse
 
         return theta
@@ -75,10 +73,11 @@ class Sample:
     # Run PolyChord with the Gaussian model
     def run_polychord(self):
         if self.settings["Npulse"] == "free":
-            nDims = self.max_peaks * 4 + 2  # Amplitude, center, width
+            nDims = self.settings["max_peaks"] * 4 + 2  # Amplitude, center, width
             print("Npulse is a free parameter")
         else:
-            nDims = self.max_peaks * 4 + 1
+            self.settings["max_peaks"] = self.settings["Npulse"]
+            nDims = self.settings["max_peaks"] * 4 + 1
             print("Npulse is fixed to " + str(self.settings["Npulse"]))
 
         nDerived = 0

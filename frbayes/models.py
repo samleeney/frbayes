@@ -8,7 +8,7 @@ class Models:
         self.settings = settings
 
     def emg(self, t, theta):
-        Npulse = theta[4 * self.settings["max_peaks"] + 1]
+        Npulse = theta[4 * self.settings["Npulse"]]
         A = theta[0 : self.settings["max_peaks"]]
         tao = theta[self.settings["max_peaks"] : 2 * self.settings["max_peaks"]]
         u = theta[2 * self.settings["max_peaks"] : 3 * self.settings["max_peaks"]]
@@ -31,7 +31,7 @@ class Models:
         return np.sum(s, axis=0)
 
     def emg_npf(self, t, theta):
-        Npulse = int(self.settings["Npulse"] - 1)
+        Npulse = self.settings["Npulse"]
         A = theta[0 : self.settings["max_peaks"]]
         tao = theta[self.settings["max_peaks"] : 2 * self.settings["max_peaks"]]
         u = theta[2 * self.settings["max_peaks"] : 3 * self.settings["max_peaks"]]
@@ -45,7 +45,7 @@ class Models:
                 * erfc((((u - t) * tao) + w**2) / (w * tao * np.sqrt(2)))
             )
 
-        for i in range(Npulse):
+        for i in range(self.settings["max_peaks"]):
             s[i] = f(t, A[i], tao[i], u[i], w[i])
 
         return np.sum(s, axis=0)
