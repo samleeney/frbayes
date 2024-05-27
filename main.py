@@ -4,6 +4,7 @@ from frbayes.utils import load_settings
 import importlib
 import os
 import yaml
+import numpy as np
 
 # Reload the modules to ensure changes are reflected
 importlib.reload(analysis)
@@ -18,6 +19,7 @@ def main():
     print("slurm_job_id is " + str(slurm_job_id))
     settings["Npulse"] = int(slurm_job_id)
     settings["file_root"] = "npulse=" + str(settings["Npulse"]) + "_"
+    settings["max_peaks"] = np.copy(settings["Npulse"])
     print(f"Running job {slurm_job_id} with Npulse = {settings['Npulse']}")
 
     # Ensure results directory exists
