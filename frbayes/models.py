@@ -33,7 +33,7 @@ def emg(t, theta):
 def emg_npf(t, theta):
     # Num pulses fixed
     max_peaks = settings["max_peaks"]
-    Npulse = int(settings["Npulse"] - 1)
+    Npulse = int(settings["Npulse"])
     A = theta[0:max_peaks]
     tao = theta[max_peaks : 2 * max_peaks]
     u = theta[2 * max_peaks : 3 * max_peaks]
