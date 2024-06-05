@@ -2,7 +2,8 @@ import numpy as np
 import pypolychord
 from pypolychord.priors import UniformPrior, LogUniformPrior
 from frbayes.analysis import FRBAnalysis
-from frbayes.models import Models
+import yaml
+import os
 from scipy.special import erfc
 from frbayes.models import emg
 from frbayes.settings import global_settings
@@ -43,48 +44,23 @@ def loglikelihood(theta):
 
             s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
         else:
-            self.emg_model = Models(self.settings).emg_npf
+            s[i] = 0 * np.ones(len(t))
 
-    # Define the Gaussian model likelihood
-    def loglikelihood(self, theta):
-        """Gaussian Model Likelihood"""
-        model = self.emg_model(self.t, theta)
-        sigma = theta[(4 * self.settings["max_peaks"])]
+    # print(s)
 
-        logL = (
-            np.log(1 / (sigma * np.sqrt(2 * np.pi)))
-            - 0.5 * ((self.pp - model) ** 2) / (sigma**2)
-        ).sum()
+    model = np.sum(s, axis=0)
 
-        return logL, []
+    logL = (
+        np.log(1 / (sigma * np.sqrt(2 * np.pi)))
+        - 0.5 * ((pp - model) ** 2) / (sigma**2)
+    ).sum()
 
-    def prior(self, hypercube):
-        theta = np.zeros_like(hypercube)
+    return logL, []
 
-        # Populate each parameter array
-        # Populate each parameter array
 
-        for i in range(self.settings["max_peaks"]):
-            theta[i] = UniformPrior(0, 5)(hypercube[i])  # A
-            theta[self.settings["max_peaks"] + i] = UniformPrior(1, 5)(
-                hypercube[self.settings["max_peaks"] + i]
-            )  # tao (keep greater than 1 to avoid overflow)
-            theta[(2 * self.settings["max_peaks"]) + i] = UniformPrior(0, 5)(
-                hypercube[(2 * self.settings["max_peaks"]) + i]
-            )  # u
-            theta[(3 * self.settings["max_peaks"]) + i] = UniformPrior(0, 5)(
-                hypercube[(3 * self.settings["max_peaks"]) + i]
-            )  # w
+def prior(hypercube):
 
-        theta[(4 * self.settings["max_peaks"])] = LogUniformPrior(0.001, 1)(
-            hypercube[(4 * self.settings["max_peaks"])]
-        )  # sigma
-        if self.settings["Npulse"] == "free":
-            theta[4 * self.settings["max_peaks"] + 1] = UniformPrior(
-                1, self.settings["max_peaks"]
-            )(
-                hypercube[4 * self.settings["max_peaks"] + 1]
-            )  # Npulse
+    theta = np.zeros_like(hypercube)
 
     # Populate each parameter array
     for i in range(max_peaks):
@@ -109,7 +85,6 @@ def loglikelihood(theta):
 
     return theta
 
-        nDerived = 0
 
 # Run PolyChord with the Gaussian model
 def run_polychord(file_root):
@@ -124,6 +99,7 @@ def run_polychord(file_root):
     output = pypolychord.run(
         loglikelihood,
         nDims,
+        nlive=5,
         nDerived=nDerived,
         prior=prior,
         file_root=file_root,

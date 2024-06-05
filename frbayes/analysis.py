@@ -28,6 +28,10 @@ class FRBAnalysis:
             paramnames_all.append(r"$w_{{{}}}$".format(i))
 
         paramnames_all.append(r"$\\sigma$")
+
+        if global_settings.get("fit_pulses") is True:
+            paramnames_all.append(r"$N_{\text{pulse}}$")
+
         self.paramnames_all = paramnames_all
 
     def plot_inputs(self):
@@ -116,5 +120,87 @@ class FRBAnalysis:
 
         plt.savefig(f"results/{self.file_root}_f_posterior_combined.pdf")
         plt.ylim((0, 3))
+        plt.close()
+        print("Done!")
+
+    def process_chains(self):
+        """Process chains with anesthetic and plot posterior distributions."""
+        # Enable LaTeX rendering in matplotlib
+        plt.rc("text", usetex=True)
+        plt.rc("font", family="serif")
+
+        self.chains = read_chains(
+            "chains/" + self.file_root, columns=self.paramnames_all
+        )
+
+        # Select a subset of parameter names to plot
+        ptd = 3  # peaks to display
+        paramnames_subset = (
+            self.paramnames_all[0:ptd]
+            + self.paramnames_all[self.max_peaks : self.max_peaks + ptd]
+            + self.paramnames_all[2 * self.max_peaks : 2 * self.max_peaks + ptd]
+            + self.paramnames_all[3 * self.max_peaks : 3 * self.max_peaks + ptd]
+            + self.paramnames_all[4 * self.max_peaks :]
+        )
+
+        paramnames_sigma = [self.paramnames_all[(4 * self.max_peaks)]]
+        paramnames_amp = self.paramnames_all[0 : self.max_peaks] + paramnames_sigma
+        paramnames_tao = (
+            self.paramnames_all[self.max_peaks : 2 * self.max_peaks] + paramnames_sigma
+        )
+        paramnames_u = (
+            self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
+            + paramnames_sigma
+        )
+        paramnames_w = (
+            self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
+            + paramnames_sigma
+        )
+
+        if global_settings.get("file_root") is True:
+            paramnames_Npulse = [self.paramnames_all[(4 * self.max_peaks) + 1]]
+            paramnames_amp += paramnames_Npulse
+            paramnames_tao += paramnames_Npulse
+            paramnames_u += paramnames_Npulse
+            paramnames_w += paramnames_Npulse
+
+        # Create 2D plot axes ss
+        fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
+        print("Plot subset...")
+        self.chains.plot_2d(ax)
+        os.makedirs("results", exist_ok=True)
+        fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
+        plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for amplitude
+        fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
+        print("Plot amplitude...")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_amp_posterior.pdf")
+        plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for tao
+        fig, ax = make_2d_axes(paramnames_tao, figsize=(6, 6))
+        print("Plot tao...")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_tao_posterior.pdf")
+        plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for u
+        fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
+        print("Plot u...")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_u_posterior.pdf")
+        plt.close()
+        print("Done!")
+
+        # Create 2D plot axes for w
+        fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
+        print("Plot w...")
+        self.chains.plot_2d(ax)
+        fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
         plt.close()
         print("Done!")
