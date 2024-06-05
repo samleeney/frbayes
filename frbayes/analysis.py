@@ -56,7 +56,7 @@ class FRBAnalysis:
 
     def functional_posteriors(self):
         from fgivenx import plot_contours, plot_lines
-        from .models import emg
+        from frbayes.models import emg
 
         def emgfgx(t, theta):
             if global_settings.get("fit_pulses") is True:
