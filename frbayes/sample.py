@@ -99,7 +99,6 @@ def run_polychord(file_root):
     output = pypolychord.run(
         loglikelihood,
         nDims,
-        nlive=5,
         nDerived=nDerived,
         prior=prior,
         file_root=file_root,
