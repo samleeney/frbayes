@@ -1,13 +1,20 @@
 import numpy as np
 import h5py
 import os
-from .utils import downsample, calculate_snr
+from frbayes.utils import downsample, calculate_snr
+from frbayes.settings import global_settings
 
 
-def preprocess_data(settings):
+def preprocess_data():
     """Preprocess data and save pulse profile SNR to CSV."""
     # Load data from the HDF5 file
-    data = h5py.File(settings["data_file"], "r")
+    data = h5py.File(global_settings.get("data_file"), "r")
+
+    original_freq_res = float(global_settings.get("original_freq_res"))
+    original_time_res = float(global_settings.get("original_time_res"))
+    desired_freq_res = float(global_settings.get("desired_freq_res"))
+    desired_time_res = float(global_settings.get("desired_time_res"))
+
     wfall = data["waterfall"][:]
     data.close()
 
@@ -15,10 +22,6 @@ def preprocess_data(settings):
     wfall[np.isnan(wfall)] = np.nanmedian(wfall)
 
     # Extract required parameters
-    original_freq_res = float(settings["original_freq_res"])
-    original_time_res = float(settings["original_time_res"])
-    desired_freq_res = float(settings["desired_freq_res"])
-    desired_time_res = float(settings["desired_time_res"])
 
     # Calculate the downsampling factors
     factor_freq = int(desired_freq_res / original_freq_res)
