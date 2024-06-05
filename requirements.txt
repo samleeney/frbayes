@@ -5,3 +5,4 @@ PyYAML
 SciencePlots
 anesthetic
 mpi4py
+fgivenx

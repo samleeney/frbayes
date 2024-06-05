@@ -1,4 +1,5 @@
 import numpy as np
+import yaml
 
 
 def downsample(data, factor_time, factor_freq):
@@ -26,3 +27,9 @@ def calculate_snr(wfall_downsampled, pulse_profile):
     residual_snr = residual_noise / noise_std
 
     return pulse_profile_snr, residual_snr
+
+
+def load_settings():
+    """Load settings from a YAML file."""
+    with open("settings.yaml", "r") as file:
+        return yaml.safe_load(file)
