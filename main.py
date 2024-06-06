@@ -1,35 +1,34 @@
-from frbayes import data, analysis, sample, models
-from frbayes.settings import global_settings
-import importlib
 import os
-import yaml
-import numpy as np
+from frbayes import data, analysis, sample
+from frbayes.settings import global_settings
+from frbayes.sample import FRBModel  # Import FRBModel class from frb_model.py
 
 
 def main():
-    # Ensure the global settings are loaded, handled by global_settings instance in settings.py
+    slurm_job_id = os.environ.get("SLURM_ARRAY_TASK_ID")
     global_settings.load_settings()
+    global_settings.set("max_peaks", int(slurm_job_id))
+    global_settings.set("file_root", f"fixed_npeaks={slurm_job_id}")
 
     # Ensure results directory exists
     results_dir = "results"
     os.makedirs(results_dir, exist_ok=True)
 
     # Preprocess data
-    data.preprocess_data()  # Assuming global settings are now accessed within this function
+    data.preprocess_data()
 
     # Plot inputs
-    frb_analysis = (
-        analysis.FRBAnalysis()
-    )  # Assuming global settings are now accessed within this class
+    frb_analysis = analysis.FRBAnalysis()
     frb_analysis.plot_inputs()
 
-    # Run PolyChord to generate the chains
-    file_root = "simple_gaussian"
-    sample.run_polychord(file_root)  # Assuming a model identifier is needed
+    # Initialize the FRB model and run PolyChord
+    # frb_model = FRBModel()
+    # frb_model.run_polychord()
 
-    # Process chains with anesthetic
+    # Process chains with anesthetic using the frb_analysis instance
     frb_analysis.process_chains()
     frb_analysis.functional_posteriors()
 
 
-main()
+if __name__ == "__main__":
+    main()

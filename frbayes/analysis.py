@@ -4,7 +4,7 @@ import h5py
 import os
 from frbayes.utils import downsample, calculate_snr
 from frbayes.data import preprocess_data
-from frbayes.settings import global_settings  # Import global settings
+from frbayes.settings import global_settings
 import scienceplots
 from anesthetic import read_chains, make_2d_axes
 
@@ -134,7 +134,11 @@ class FRBAnalysis:
         )
 
         # Select a subset of parameter names to plot
-        ptd = 3  # peaks to display
+        if self.max_peaks > 3:
+            ptd = 3  # peaks to display
+        else:
+            ptd = np.copy(self.max_peaks)
+
         paramnames_subset = (
             self.paramnames_all[0:ptd]
             + self.paramnames_all[self.max_peaks : self.max_peaks + ptd]

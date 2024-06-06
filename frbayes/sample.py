@@ -13,99 +13,91 @@ try:
 except ImportError:
     pass
 
-# Load preprocessed data
-analysis = FRBAnalysis()
-pp = analysis.pulse_profile_snr
-t = analysis.time_axis
-max_peaks = global_settings.get("max_peaks")
-pp = pp + np.abs(np.min(pp))  # shift to only positive
 
+class FRBModel:
+    def __init__(self):
+        self.analysis = FRBAnalysis()
+        self.pp = self.analysis.pulse_profile_snr
+        self.t = self.analysis.time_axis
+        self.max_peaks = global_settings.get("max_peaks")
+        self.pp += np.abs(np.min(self.pp))  # shift to only positive
+        self.sigma = None
 
-# Define the Gaussian model likelihood
-def loglikelihood(theta):
-    """Gaussian Model Likelihood"""
-    sigma = theta[(4 * max_peaks)]
+    def loglikelihood(self, theta):
+        """Gaussian Model Likelihood"""
+        sigma = theta[(4 * self.max_peaks)]
+        self.sigma = sigma
 
-    if global_settings.get("fit_pulses") is True:
-        Npulse = theta[(4 * max_peaks) + 1]
-    else:
-        Npulse = max_peaks
-
-    A = theta[0:max_peaks]
-    tao = theta[max_peaks : 2 * max_peaks]
-    u = theta[2 * max_peaks : 3 * max_peaks]
-    w = theta[3 * max_peaks : 4 * max_peaks]
-
-    # Assuming t and pp are globally defined
-    s = np.zeros((max_peaks, len(t)))
-
-    for i in range(max_peaks):
-        if i < Npulse:
-
-            s[i] = emg(t, A[i], tao[i], u[i], w[i])  # , sigma_pulse[i])
+        if global_settings.get("fit_pulses"):
+            Npulse = theta[(4 * self.max_peaks) + 1]
         else:
-            s[i] = 0 * np.ones(len(t))
+            Npulse = self.max_peaks
 
-    # print(s)
+        A = theta[0 : self.max_peaks]
+        tao = theta[self.max_peaks : 2 * self.max_peaks]
+        u = theta[2 * self.max_peaks : 3 * self.max_peaks]
+        w = theta[3 * self.max_peaks : 4 * self.max_peaks]
 
-    model = np.sum(s, axis=0)
+        s = np.zeros((self.max_peaks, len(self.t)))
 
-    logL = (
-        np.log(1 / (sigma * np.sqrt(2 * np.pi)))
-        - 0.5 * ((pp - model) ** 2) / (sigma**2)
-    ).sum()
+        for i in range(self.max_peaks):
+            if i < Npulse:
+                s[i] = emg(self.t, A[i], tao[i], u[i], w[i])
+            else:
+                s[i] = np.zeros(len(self.t))
 
-    return logL, []
+        model = np.sum(s, axis=0)
+        logL = (
+            np.log(1 / (sigma * np.sqrt(2 * np.pi)))
+            - 0.5 * ((self.pp - model) ** 2) / (sigma**2)
+        ).sum()
 
+        return logL, []
 
-def prior(hypercube):
+    def prior(self, hypercube):
+        theta = np.zeros_like(hypercube)
 
-    theta = np.zeros_like(hypercube)
+        for i in range(self.max_peaks):
+            theta[i] = UniformPrior(0, 5)(hypercube[i])  # Amplitude A
+            theta[self.max_peaks + i] = UniformPrior(1, 5)(
+                hypercube[self.max_peaks + i]
+            )  # Time constant tao
+            theta[2 * self.max_peaks + i] = UniformPrior(0, 5)(
+                hypercube[2 * self.max_peaks + i]
+            )  # Location u
+            theta[3 * self.max_peaks + i] = UniformPrior(0, 5)(
+                hypercube[3 * self.max_peaks + i]
+            )  # Width w
+        theta[4 * self.max_peaks] = LogUniformPrior(0.001, 1)(
+            hypercube[4 * self.max_peaks]
+        )  # Noise sigma
 
-    # Populate each parameter array
-    for i in range(max_peaks):
-        theta[i] = UniformPrior(0, 5)(hypercube[i])  # A
-        theta[max_peaks + i] = UniformPrior(1, 5)(
-            hypercube[max_peaks + i]
-        )  # tao (keep greater than 1 to avoid overflow)
-        theta[(2 * max_peaks) + i] = UniformPrior(0, 5)(
-            hypercube[(2 * max_peaks) + i]
-        )  # u
-        theta[(3 * max_peaks) + i] = UniformPrior(0, 5)(
-            hypercube[(3 * max_peaks) + i]
-        )  # w
-    theta[(4 * max_peaks)] = LogUniformPrior(0.001, 1)(
-        hypercube[(4 * max_peaks)]
-    )  # sigma
+        if global_settings.get("fit_pulses"):
+            theta[4 * self.max_peaks + 1] = UniformPrior(1, self.max_peaks)(
+                hypercube[4 * self.max_peaks + 1]
+            )  # Number of pulses Npulse
 
-    if global_settings.get("fit_pulses") is True:
-        theta[(4 * max_peaks) + 1] = UniformPrior(1, max_peaks)(
-            hypercube[(4 * max_peaks) + 1]
-        )  # Npulse
+        return theta
 
-    return theta
+    def run_polychord(self):
+        nDims = self.max_peaks * 4 + 1
+        if global_settings.get("fit_pulses"):
+            nDims += 1
 
+        nDerived = 0
 
-# Run PolyChord with the Gaussian model
-def run_polychord(file_root):
-
-    if global_settings.get("fit_pulses") is True:
-        nDims = max_peaks * 4 + 2
-    else:
-        nDims = max_peaks * 4 + 1
-
-    nDerived = 0
-
-    output = pypolychord.run(
-        loglikelihood,
-        nDims,
-        nDerived=nDerived,
-        prior=prior,
-        file_root=file_root,
-        do_clustering=True,
-        read_resume=False,
-    )
+        output = pypolychord.run(
+            self.loglikelihood,
+            nDims,
+            nlive=5,
+            nDerived=nDerived,
+            prior=self.prior,
+            file_root=global_settings.get("file_root"),
+            do_clustering=True,
+            read_resume=True,
+        )
 
 
 if __name__ == "__main__":
-    run_polychord(file_root)
+    frb_model = FRBModel()
+    frb_model.run_polychord()
