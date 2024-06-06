@@ -22,8 +22,8 @@ def main():
     frb_analysis.plot_inputs()
 
     # Initialize the FRB model and run PolyChord
-    # frb_model = FRBModel()
-    # frb_model.run_polychord()
+    frb_model = FRBModel()
+    frb_model.run_polychord()
 
     # Process chains with anesthetic using the frb_analysis instance
     frb_analysis.process_chains()
