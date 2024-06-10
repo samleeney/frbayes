@@ -89,7 +89,6 @@ class FRBModel:
         output = pypolychord.run(
             self.loglikelihood,
             nDims,
-            nlive=5,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),

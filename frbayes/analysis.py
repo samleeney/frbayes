@@ -23,8 +23,11 @@ class FRBAnalysis:
         paramnames_all = []
         for i in range(self.max_peaks):
             paramnames_all.append(r"$A_{{{}}}$".format(i))
-            paramnames_all.append(r"$\\tau_{{{}}}$".format(i))
+        for i in range(self.max_peaks):
+            paramnames_all.append(r"$\tau_{{{}}}$".format(i))
+        for i in range(self.max_peaks):
             paramnames_all.append(r"$u_{{{}}}$".format(i))
+        for i in range(self.max_peaks):
             paramnames_all.append(r"$w_{{{}}}$".format(i))
 
         paramnames_all.append(r"$\\sigma$")
