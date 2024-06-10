@@ -89,18 +89,16 @@ class FRBAnalysis:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True, sharey=True)
 
         # Load the chains
-        self.chains = read_chains(
-            "chains/" + self.file_root, columns=self.paramnames_all
-        )
+        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
         # Plotting contours and lines
         print("Plotting contours...")
         contour = plot_contours(
             emgfgx,
             self.time_axis,
-            self.chains,
+            chains,
             ax1,
-            weights=self.chains.get_weights(),
+            weights=chains.get_weights(),
             colors=plt.cm.Blues_r,
         )
         ax1.set_ylabel("SNR")
@@ -109,9 +107,9 @@ class FRBAnalysis:
         lines = plot_lines(
             emgfgx,
             self.time_axis,
-            self.chains,
+            chains,
             ax2,
-            weights=self.chains.get_weights(),
+            weights=chains.get_weights(),
             color="b",
         )
         ax2.set_xlabel("t")
@@ -132,9 +130,7 @@ class FRBAnalysis:
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
 
-        self.chains = read_chains(
-            "chains/" + self.file_root, columns=self.paramnames_all
-        )
+        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
         # Select a subset of parameter names to plot
         if self.max_peaks > 3:
@@ -174,7 +170,7 @@ class FRBAnalysis:
         # Create 2D plot axes ss
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
-        self.chains.plot_2d(ax)
+        chains.plot_2d(ax)
         os.makedirs("results", exist_ok=True)
         fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
         plt.close()
@@ -183,7 +179,7 @@ class FRBAnalysis:
         # Create 2D plot axes for amplitude
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
         print("Plot amplitude...")
-        self.chains.plot_2d(ax)
+        chains.plot_2d(ax)
         fig.savefig(f"results/{self.file_root}_amp_posterior.pdf")
         plt.close()
         print("Done!")
@@ -191,7 +187,7 @@ class FRBAnalysis:
         # Create 2D plot axes for tao
         fig, ax = make_2d_axes(paramnames_tao, figsize=(6, 6))
         print("Plot tao...")
-        self.chains.plot_2d(ax)
+        chains.plot_2d(ax)
         fig.savefig(f"results/{self.file_root}_tao_posterior.pdf")
         plt.close()
         print("Done!")
@@ -199,7 +195,7 @@ class FRBAnalysis:
         # Create 2D plot axes for u
         fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
         print("Plot u...")
-        self.chains.plot_2d(ax)
+        chains.plot_2d(ax)
         fig.savefig(f"results/{self.file_root}_u_posterior.pdf")
         plt.close()
         print("Done!")
@@ -207,7 +203,7 @@ class FRBAnalysis:
         # Create 2D plot axes for w
         fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
         print("Plot w...")
-        self.chains.plot_2d(ax)
+        chains.plot_2d(ax)
         fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
         plt.close()
         print("Done!")
