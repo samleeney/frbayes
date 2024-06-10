@@ -7,6 +7,8 @@ from frbayes.data import preprocess_data
 from frbayes.settings import global_settings
 import scienceplots
 from anesthetic import read_chains, make_2d_axes
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 # Activate the "science" style
 plt.style.use("science")
@@ -102,6 +104,38 @@ class FRBAnalysis:
             colors=plt.cm.Blues_r,
         )
         ax1.set_ylabel("SNR")
+
+        colors = plt.cm.viridis(np.linspace(0, 1, self.max_peaks))
+
+        for i in range(0, self.max_peaks):
+            mean = chains.loc[:, ["$u_{" + str(i) + "}$"]].mean()
+            std = chains.loc[:, ["$u_{" + str(i) + "}$"]].std()
+            color = colors[i]
+
+            mean_value = float(mean.iloc[0])
+            std_value = float(std.iloc[0])
+
+            ax1.axvline(mean_value, color=color, linestyle="-", linewidth=2)
+            ax1.axvspan(
+                mean_value - std_value * 0.5,
+                mean_value + std_value * 0.5,
+                color=color,
+                alpha=0.3,
+            )
+
+            print(f"Mean is {mean_value}")
+            print(f"Standard dev is {std_value}")
+
+        # Create custom legend handles
+        mean_handle = Line2D(
+            [0], [0], color="black", linestyle="-", linewidth=2, label="$\bar{\mu}$"
+        )
+        std_handle = Patch(
+            facecolor="black", edgecolor="black", alpha=0.3, label=$"1\sigma_\mu"$
+        )
+
+        # Add legend to the plot
+        ax1.legend(handles=[mean_handle, std_handle], loc="upper right")
 
         print("Plotting lines...")
         lines = plot_lines(
