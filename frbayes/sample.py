@@ -5,7 +5,7 @@ from frbayes.analysis import FRBAnalysis
 import yaml
 import os
 from scipy.special import erfc
-from frbayes.models import emg
+from frbayes.models import emg, exponential
 from frbayes.settings import global_settings
 
 try:
@@ -22,27 +22,37 @@ class FRBModel:
         self.max_peaks = global_settings.get("max_peaks")
         self.pp += np.abs(np.min(self.pp))  # shift to only positive
         self.sigma = None
+        if global_settings.get("model") == "emg":
+            self.model = emg
+        elif global_settings.get("model") == "exponential":
+            self.model = exponential
 
     def loglikelihood(self, theta):
         """Gaussian Model Likelihood"""
         sigma = theta[(4 * self.max_peaks)]
         self.sigma = sigma
 
-        if global_settings.get("fit_pulses"):
-            Npulse = theta[(4 * self.max_peaks) + 1]
-        else:
-            Npulse = self.max_peaks
-
         A = theta[0 : self.max_peaks]
         tao = theta[self.max_peaks : 2 * self.max_peaks]
         u = theta[2 * self.max_peaks : 3 * self.max_peaks]
-        w = theta[3 * self.max_peaks : 4 * self.max_peaks]
+
+        if global_settings.get("model") == "emg":
+            w = theta[3 * self.max_peaks : 4 * self.max_peaks]
+
+        if global_settings.get("fit_pulses"):
+            if global_settings.get("model") == "emg":
+                Npulse = theta[(4 * self.max_peaks) + 1]
+            elif global_settings.get("model") == "exponential":
+                Npulse = theta[(3 * self.max_peaks) + 1]
+
+        else:
+            Npulse = self.max_peaks
 
         s = np.zeros((self.max_peaks, len(self.t)))
 
         for i in range(self.max_peaks):
             if i < Npulse:
-                s[i] = emg(self.t, A[i], tao[i], u[i], w[i])
+                s[i] = self.model(self.t, A[i], tao[i], u[i], w[i])
             else:
                 s[i] = np.zeros(len(self.t))
 
