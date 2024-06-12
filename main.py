@@ -6,18 +6,20 @@ from frbayes.sample import FRBModel  # Import FRBModel class from frb_model.py
 
 def main():
     slurm_job_id = (
-        1
+        2
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
-
     global_settings.load_settings()
+    fit_pulses_ = global_settings.get("fit_pulses")
+    global_settings.set("model", str(os.environ.get("MODEL_FRB")))
+    model_ = global_settings.get("model")
+    print("The model is " + model_)
     global_settings.set("max_peaks", int(slurm_job_id))
-    global_settings.set("file_root", f"fixed_npeaks={slurm_job_id}")
-
-    # Ensure results directory exists
-    results_dir = "test"
-    os.makedirs(results_dir, exist_ok=True)
+    global_settings.set(
+        "file_root",
+        f"fit_pulses={fit_pulses_}_{model_}_npeaks={slurm_job_id}",
+    )
 
     # Preprocess data
     data.preprocess_data()

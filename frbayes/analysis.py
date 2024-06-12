@@ -90,9 +90,9 @@ class FRBAnalysis:
             for i in range(self.max_peaks):
                 if i < Npulse:
                     if global_settings.get("model") == "emg":
-                        s[i] = self.model(t, theta, self.max_peaks)
+                        s[i] = self.model(t, theta, self.max_peaks, i)
                     elif global_settings.get("model") == "exponential":
-                        s[i] = self.model(t, theta, self.max_peaks)
+                        s[i] = self.model(t, theta, self.max_peaks, i)
                 else:
                     s[i] = 0 * np.ones(len(t))
 
@@ -196,11 +196,16 @@ class FRBAnalysis:
 
         if global_settings.get("model") == "emg":
             dim = 4
+            paramnames_sigma = [self.paramnames_all[(dim * self.max_peaks)]]
+            paramnames_w = (
+                self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
+                + paramnames_sigma
+            )
         elif global_settings.get("model") == "exponential":
             dim = 3
+            paramnames_sigma = [self.paramnames_all[(dim * self.max_peaks)]]
 
         paramnames_subset += self.paramnames_all[dim * self.max_peaks :]
-        paramnames_sigma = [self.paramnames_all[(dim * self.max_peaks)]]
         paramnames_amp = self.paramnames_all[0 : self.max_peaks] + paramnames_sigma
         paramnames_tao = (
             self.paramnames_all[self.max_peaks : 2 * self.max_peaks] + paramnames_sigma

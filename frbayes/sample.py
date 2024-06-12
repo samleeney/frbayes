@@ -21,6 +21,7 @@ class FRBModel:
         self.t = self.analysis.time_axis
         self.max_peaks = global_settings.get("max_peaks")
         self.pp += np.abs(np.min(self.pp))  # shift to only positive
+        print(global_settings.get("model"))
         if global_settings.get("model") == "emg":
             self.model = emg
         elif global_settings.get("model") == "exponential":
@@ -53,14 +54,14 @@ class FRBModel:
 
         for i in range(self.max_peaks):
             if i < Npulse:
-                s[i] = self.model(self.t, theta, self.max_peaks)
+                s[i] = self.model(self.t, theta, self.max_peaks, i)
             else:
                 s[i] = np.zeros(len(self.t))
 
-        model = np.sum(s, axis=0)
+        pp_ = np.sum(s, axis=0)
         logL = (
             np.log(1 / (sigma * np.sqrt(2 * np.pi)))
-            - 0.5 * ((self.pp - model) ** 2) / (sigma**2)
+            - 0.5 * ((self.pp - pp_) ** 2) / (sigma**2)
         ).sum()
 
         return logL, []
@@ -104,6 +105,7 @@ class FRBModel:
         output = pypolychord.run(
             self.loglikelihood,
             self.nDims,
+            nlive=10,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),
