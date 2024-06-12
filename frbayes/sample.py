@@ -21,30 +21,31 @@ class FRBModel:
         self.t = self.analysis.time_axis
         self.max_peaks = global_settings.get("max_peaks")
         self.pp += np.abs(np.min(self.pp))  # shift to only positive
-        self.sigma = None
         if global_settings.get("model") == "emg":
             self.model = emg
         elif global_settings.get("model") == "exponential":
             self.model = exponential
 
-    def loglikelihood(self, theta):
-        """Gaussian Model Likelihood"""
-        sigma = theta[(4 * self.max_peaks)]
-        self.sigma = sigma
-
-        A = theta[0 : self.max_peaks]
-        tao = theta[self.max_peaks : 2 * self.max_peaks]
-        u = theta[2 * self.max_peaks : 3 * self.max_peaks]
-
         if global_settings.get("model") == "emg":
-            w = theta[3 * self.max_peaks : 4 * self.max_peaks]
+            self.nDims = (self.max_peaks * 4) + 1
+        elif global_settings.get("model") == "exponential":
+            self.nDims = (self.max_peaks * 3) + 1
 
         if global_settings.get("fit_pulses"):
-            if global_settings.get("model") == "emg":
-                Npulse = theta[(4 * self.max_peaks) + 1]
-            elif global_settings.get("model") == "exponential":
-                Npulse = theta[(3 * self.max_peaks) + 1]
+            self.nDims += 1
 
+    def loglikelihood(self, theta):
+        """Gaussian Model Likelihood"""
+
+        # Sigma location in array depends on model
+        if global_settings.get("model") == "emg":
+            sigma = theta[(4 * self.max_peaks)]
+        elif global_settings.get("model") == "exponential":
+            sigma = theta[(3 * self.max_peaks)]
+
+        # Check if fitting for npulse or not. If not, set to max_peaks.
+        if global_settings.get("fit_pulses"):
+            Npulse = theta[(4 * self.max_peaks) + 1]
         else:
             Npulse = self.max_peaks
 
@@ -52,7 +53,7 @@ class FRBModel:
 
         for i in range(self.max_peaks):
             if i < Npulse:
-                s[i] = self.model(self.t, A[i], tao[i], u[i], w[i])
+                s[i] = self.model(self.t, theta, self.max_peaks)
             else:
                 s[i] = np.zeros(len(self.t))
 
@@ -75,30 +76,34 @@ class FRBModel:
             theta[2 * self.max_peaks + i] = UniformPrior(0, 5)(
                 hypercube[2 * self.max_peaks + i]
             )  # Location u
-            theta[3 * self.max_peaks + i] = UniformPrior(0, 5)(
-                hypercube[3 * self.max_peaks + i]
-            )  # Width w
-        theta[4 * self.max_peaks] = LogUniformPrior(0.001, 1)(
-            hypercube[4 * self.max_peaks]
+            if global_settings.get("model") == "emg":
+                theta[3 * self.max_peaks + i] = UniformPrior(0, 5)(
+                    hypercube[3 * self.max_peaks + i]
+                )  # Width w
+
+        # The number of parameters in the model changes depending on model. This accoutns for that.
+        if global_settings.get("model") == "emg":
+            dim = 4
+        elif global_settings.get("model") == "exponential":
+            dim = 3
+
+        theta[dim * self.max_peaks] = LogUniformPrior(0.001, 1)(
+            hypercube[dim * self.max_peaks]
         )  # Noise sigma
 
         if global_settings.get("fit_pulses"):
-            theta[4 * self.max_peaks + 1] = UniformPrior(1, self.max_peaks)(
-                hypercube[4 * self.max_peaks + 1]
+            theta[dim * self.max_peaks + 1] = UniformPrior(1, self.max_peaks)(
+                hypercube[dim * self.max_peaks + 1]
             )  # Number of pulses Npulse
 
         return theta
 
     def run_polychord(self):
-        nDims = self.max_peaks * 4 + 1
-        if global_settings.get("fit_pulses"):
-            nDims += 1
-
         nDerived = 0
 
         output = pypolychord.run(
             self.loglikelihood,
-            nDims,
+            self.nDims,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),

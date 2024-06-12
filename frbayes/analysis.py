@@ -9,6 +9,7 @@ import scienceplots
 from anesthetic import read_chains, make_2d_axes
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from frbayes.models import emg, exponential
 
 # Activate the "science" style
 plt.style.use("science")
@@ -29,8 +30,9 @@ class FRBAnalysis:
             paramnames_all.append(r"$\tau_{{{}}}$".format(i))
         for i in range(self.max_peaks):
             paramnames_all.append(r"$u_{{{}}}$".format(i))
-        for i in range(self.max_peaks):
-            paramnames_all.append(r"$w_{{{}}}$".format(i))
+        if global_settings.get("model") == "emg":
+            for i in range(self.max_peaks):
+                paramnames_all.append(r"$w_{{{}}}$".format(i))
 
         paramnames_all.append(r"$\\sigma$")
 
@@ -38,6 +40,10 @@ class FRBAnalysis:
             paramnames_all.append(r"$N_{\text{pulse}}$")
 
         self.paramnames_all = paramnames_all
+        if global_settings.get("model") == "emg":
+            self.model = emg
+        elif global_settings.get("model") == "exponential":
+            self.model = exponential
 
     def plot_inputs(self):
         """Plot inputs including the waterfall and pulse profile SNR."""
@@ -68,21 +74,25 @@ class FRBAnalysis:
         from frbayes.models import emg
 
         def emgfgx(t, theta):
-            if global_settings.get("fit_pulses") is True:
-                Npulse = theta[(4 * self.max_peaks) + 1]
-            else:
-                Npulse = self.max_peaks
+            if global_settings.get("model") == "emg":
+                if global_settings.get("fit_pulses") is True:
+                    Npulse = theta[(4 * self.max_peaks) + 1]
+                else:
+                    Npulse = self.max_peaks
+            elif global_settings.get("model") == "exponential":
+                if global_settings.get("fit_pulses") is True:
+                    Npulse = theta[(3 * self.max_peaks) + 1]
+                else:
+                    Npulse = self.max_peaks
 
-            sigma = theta[(4 * self.max_peaks)]
-            A = theta[0 : self.max_peaks]
-            tao = theta[self.max_peaks : 2 * self.max_peaks]
-            u = theta[2 * self.max_peaks : 3 * self.max_peaks]
-            w = theta[3 * self.max_peaks : 4 * self.max_peaks]
             s = np.zeros((self.max_peaks, len(t)))
 
             for i in range(self.max_peaks):
                 if i < Npulse:
-                    s[i] = emg(t, A[i], tao[i], u[i], w[i])
+                    if global_settings.get("model") == "emg":
+                        s[i] = self.model(t, theta, self.max_peaks)
+                    elif global_settings.get("model") == "exponential":
+                        s[i] = self.model(t, theta, self.max_peaks)
                 else:
                     s[i] = 0 * np.ones(len(t))
 
@@ -104,6 +114,7 @@ class FRBAnalysis:
             colors=plt.cm.Blues_r,
         )
         ax1.set_ylabel("SNR")
+        print("Done!")
 
         colors = plt.cm.viridis(np.linspace(0, 1, self.max_peaks))
 
@@ -128,10 +139,15 @@ class FRBAnalysis:
 
         # Create custom legend handles
         mean_handle = Line2D(
-            [0], [0], color="black", linestyle="-", linewidth=2, label="$\bar{\mu}$"
+            [0],
+            [0],
+            color="black",
+            linestyle="-",
+            linewidth=2,
+            label=r"$\textsc{mean} \, \mu$",
         )
         std_handle = Patch(
-            facecolor="black", edgecolor="black", alpha=0.3, label=$"1\sigma_\mu"$
+            facecolor="black", edgecolor="black", alpha=0.3, label=r"$1\sigma_\mu$"
         )
 
         # Add legend to the plot
@@ -176,11 +192,15 @@ class FRBAnalysis:
             self.paramnames_all[0:ptd]
             + self.paramnames_all[self.max_peaks : self.max_peaks + ptd]
             + self.paramnames_all[2 * self.max_peaks : 2 * self.max_peaks + ptd]
-            + self.paramnames_all[3 * self.max_peaks : 3 * self.max_peaks + ptd]
-            + self.paramnames_all[4 * self.max_peaks :]
         )
 
-        paramnames_sigma = [self.paramnames_all[(4 * self.max_peaks)]]
+        if global_settings.get("model") == "emg":
+            dim = 4
+        elif global_settings.get("model") == "exponential":
+            dim = 3
+
+        paramnames_subset += self.paramnames_all[dim * self.max_peaks :]
+        paramnames_sigma = [self.paramnames_all[(dim * self.max_peaks)]]
         paramnames_amp = self.paramnames_all[0 : self.max_peaks] + paramnames_sigma
         paramnames_tao = (
             self.paramnames_all[self.max_peaks : 2 * self.max_peaks] + paramnames_sigma
@@ -189,13 +209,9 @@ class FRBAnalysis:
             self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
             + paramnames_sigma
         )
-        paramnames_w = (
-            self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
-            + paramnames_sigma
-        )
 
-        if global_settings.get("file_root") is True:
-            paramnames_Npulse = [self.paramnames_all[(4 * self.max_peaks) + 1]]
+        if global_settings.get("fit_pulses") is True:
+            paramnames_Npulse = [self.paramnames_all[(dim * self.max_peaks) + 1]]
             paramnames_amp += paramnames_Npulse
             paramnames_tao += paramnames_Npulse
             paramnames_u += paramnames_Npulse
@@ -235,9 +251,10 @@ class FRBAnalysis:
         print("Done!")
 
         # Create 2D plot axes for w
-        fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
-        print("Plot w...")
-        chains.plot_2d(ax)
-        fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
-        plt.close()
-        print("Done!")
+        if global_settings.get("model") == "emg":
+            fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
+            print("Plot w...")
+            chains.plot_2d(ax)
+            fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
+            plt.close()
+            print("Done!")
