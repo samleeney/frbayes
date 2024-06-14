@@ -31,6 +31,9 @@ class FRBModel:
             self.nDims = (self.max_peaks * 4) + 1
         elif global_settings.get("model") == "exponential":
             self.nDims = (self.max_peaks * 3) + 1
+        else:
+            model = global_settings.get("model")
+            raise ValueError(f"Model {model} not recognized")
 
         if global_settings.get("fit_pulses"):
             self.nDims += 1
@@ -105,7 +108,7 @@ class FRBModel:
         output = pypolychord.run(
             self.loglikelihood,
             self.nDims,
-            nlive=10,
+            num_repeats=self.nDims * 10,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),
