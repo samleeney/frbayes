@@ -1,6 +1,6 @@
 import numpy as np
 import pypolychord
-from pypolychord.priors import UniformPrior, LogUniformPrior
+from pypolychord.priors import UniformPrior, LogUniformPrior, SortedUniformPrior
 from frbayes.analysis import FRBAnalysis
 import yaml
 import os
@@ -72,18 +72,46 @@ class FRBModel:
     def prior(self, hypercube):
         theta = np.zeros_like(hypercube)
 
-        for i in range(self.max_peaks):
-            theta[i] = UniformPrior(0, 5)(hypercube[i])  # Amplitude A
-            theta[self.max_peaks + i] = UniformPrior(1, 5)(
-                hypercube[self.max_peaks + i]
-            )  # Time constant tao
-            theta[2 * self.max_peaks + i] = UniformPrior(0, 5)(
-                hypercube[2 * self.max_peaks + i]
-            )  # Location u
-            if global_settings.get("model") == "emg":
-                theta[3 * self.max_peaks + i] = UniformPrior(0, 5)(
-                    hypercube[3 * self.max_peaks + i]
-                )  # Width w
+        # Transform and assign sorted values for amplitude A
+        sorted_uniform_prior = SortedUniformPrior(0, 5)
+        theta[: self.max_peaks] = sorted_uniform_prior(hypercube[: self.max_peaks])
+
+        # Transform and assign sorted values for time constant tao
+        sorted_uniform_prior = SortedUniformPrior(1, 5)
+        theta[self.max_peaks : 2 * self.max_peaks] = sorted_uniform_prior(
+            hypercube[self.max_peaks : 2 * self.max_peaks]
+        )
+
+        # Transform and assign sorted values for location u
+        sorted_uniform_prior = SortedUniformPrior(0.1, np.max(self.t))
+        theta[2 * self.max_peaks : 3 * self.max_peaks] = sorted_uniform_prior(
+            hypercube[2 * self.max_peaks : 3 * self.max_peaks]
+        )
+
+        if global_settings.get("model") == "emg":
+            # Transform and assign sorted values for width w
+            sorted_uniform_prior = SortedUniformPrior(0, 5)
+            theta[3 * self.max_peaks : 4 * self.max_peaks] = sorted_uniform_prior(
+                hypercube[3 * self.max_peaks : 4 * self.max_peaks]
+            )
+
+        # The number of parameters in the model changes depending on model. This accounts for that.
+        if global_settings.get("model") == "emg":
+            dim = 4
+        elif global_settings.get("model") == "exponential":
+            dim = 3
+
+        # Transform and assign value for noise sigma
+        log_uniform_prior = LogUniformPrior(0.001, 1)
+        theta[dim * self.max_peaks] = log_uniform_prior(hypercube[dim * self.max_peaks])
+
+        if global_settings.get("fit_pulses"):
+            uniform_prior = UniformPrior(1, self.max_peaks)
+            theta[dim * self.max_peaks + 1] = uniform_prior(
+                hypercube[dim * self.max_peaks + 1]
+            )
+
+        return theta
 
         # The number of parameters in the model changes depending on model. This accoutns for that.
         if global_settings.get("model") == "emg":
@@ -108,7 +136,8 @@ class FRBModel:
         output = pypolychord.run(
             self.loglikelihood,
             self.nDims,
-            num_repeats=self.nDims * 10,
+            nlive=self.nDims * 25,
+            num_repeats=self.nDims * 15,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),

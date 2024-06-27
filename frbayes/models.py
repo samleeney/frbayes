@@ -21,5 +21,5 @@ def exponential(t, theta, max_peaks, i):
     tao = theta[max_peaks : 2 * max_peaks]
     u = theta[2 * max_peaks : 3 * max_peaks]
     f = A[i] * np.exp(-(t - u[i]) / tao[i])
-    f = np.where(t < u[i], 0, f)
+    f = np.where(t <= u[i], 0, f)
     return f
