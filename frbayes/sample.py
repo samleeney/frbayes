@@ -38,6 +38,38 @@ class FRBModel:
         if global_settings.get("fit_pulses"):
             self.nDims += 1
 
+    # def loglikelihood(self, theta):
+    #     """Gaussian Model Likelihood"""
+
+    #     # Sigma location in array depends on model
+    #     if global_settings.get("model") == "emg":
+    #         sigma = theta[(4 * self.max_peaks)]
+    #     elif global_settings.get("model") == "exponential":
+    #         sigma = theta[(3 * self.max_peaks)]
+
+    #     # Check if fitting for npulse or not. If not, set to max_peaks.
+    #     if global_settings.get("fit_pulses"):
+    #         Npulse = theta[(4 * self.max_peaks) + 1]
+    #     else:
+    #         Npulse = self.max_peaks
+
+    #     s = np.zeros((self.max_peaks, len(self.t)))
+
+    #     for i in range(self.max_peaks):
+    #         if i < Npulse:
+    #             s[i] = self.model(self.t, theta, self.max_peaks, i)
+    #         else:
+    #             s[i] = np.zeros(len(self.t))
+
+    #     pp_ = np.sum(s, axis=0)
+    #     logL = (
+    #         np.log(1 / (sigma * np.sqrt(2 * np.pi)))
+    #         - 0.5 * ((self.pp - pp_) ** 2) / (sigma**2)
+    #     ).sum()
+
+    #     return logL, []
+    #
+
     def loglikelihood(self, theta):
         """Gaussian Model Likelihood"""
 
@@ -49,23 +81,20 @@ class FRBModel:
 
         # Check if fitting for npulse or not. If not, set to max_peaks.
         if global_settings.get("fit_pulses"):
-            Npulse = theta[(4 * self.max_peaks) + 1]
+            Npulse = int(theta[(4 * self.max_peaks) + 1])
         else:
             Npulse = self.max_peaks
 
-        s = np.zeros((self.max_peaks, len(self.t)))
+        pp_ = np.zeros(len(self.t))
 
         for i in range(self.max_peaks):
             if i < Npulse:
-                s[i] = self.model(self.t, theta, self.max_peaks, i)
-            else:
-                s[i] = np.zeros(len(self.t))
+                pp_ += self.model(self.t, theta, self.max_peaks, i)
 
-        pp_ = np.sum(s, axis=0)
-        logL = (
-            np.log(1 / (sigma * np.sqrt(2 * np.pi)))
-            - 0.5 * ((self.pp - pp_) ** 2) / (sigma**2)
-        ).sum()
+        diff = self.pp - pp_
+        logL = (-0.5 * np.sum((diff**2) / (sigma**2))) - (
+            len(self.t) * np.log(sigma * np.sqrt(2 * np.pi))
+        )
 
         return logL, []
 
@@ -136,8 +165,8 @@ class FRBModel:
         output = pypolychord.run(
             self.loglikelihood,
             self.nDims,
-            nlive=self.nDims * 25,
-            num_repeats=self.nDims * 15,
+            nlive=self.nDims * 50,
+            num_repeats=self.nDims * 5,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),
