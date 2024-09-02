@@ -20,7 +20,7 @@ class FRBModel:
         self.pp = self.analysis.pulse_profile_snr
         self.t = self.analysis.time_axis
         self.max_peaks = global_settings.get("max_peaks")
-        self.pp += np.abs(np.min(self.pp))  # shift to only positive
+        # self.pp += np.abs(np.min(self.pp))  # shift to only positive
         print(global_settings.get("model"))
         if global_settings.get("model") == "emg":
             self.model = emg

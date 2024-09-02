@@ -18,7 +18,9 @@ plt.style.use("science")
 class FRBAnalysis:
     def __init__(self):
         # Access settings globally instead of passing them
-        self.pulse_profile_snr, self.time_axis = preprocess_data()
+        self.downsampled_wfall, self.pulse_profile_snr, self.time_axis = (
+            preprocess_data()
+        )
         self.file_root = global_settings.get("file_root")
         self.max_peaks = global_settings.get("max_peaks")
 
@@ -47,27 +49,54 @@ class FRBAnalysis:
 
     def plot_inputs(self):
         """Plot inputs including the waterfall and pulse profile SNR."""
-        # Load data from the HDF5 file
-        data_file = global_settings.get("data_file")
-        data = h5py.File(data_file, "r")
-        wfall = data["waterfall"][:]
-        data.close()
+        # Define the min and max values for color scaling
+        vmin = np.nanpercentile(self.downsampled_wfall, 1)
+        vmax = np.nanpercentile(self.downsampled_wfall, 99)
 
-        # Replace NaN values with the median of the data
-        wfall[np.isnan(wfall)] = np.nanmedian(wfall)
+        # Generate frequency and time axis labels for the downsampled data
+        num_freq_bins, num_time_bins = self.downsampled_wfall.shape
+        freq_axis = np.linspace(400, 800, num_freq_bins)  # Frequency in MHz
 
-        # Extract required parameters directly using global settings
-        original_freq_res = float(global_settings.get("original_freq_res"))
-        original_time_res = float(global_settings.get("original_time_res"))
-        desired_freq_res = float(global_settings.get("desired_freq_res"))
-        desired_time_res = float(global_settings.get("desired_time_res"))
+        # Create subplots
+        fig, axs = plt.subplots(
+            2, 1, figsize=(10, 16), gridspec_kw={"height_ratios": [2, 1]}
+        )
 
-        # Calculate the downsampling factors
-        factor_freq = int(desired_freq_res / original_freq_res)
-        factor_time = int(desired_time_res / original_time_res)
+        # Plot the waterfall plot
+        im = axs[0].imshow(
+            self.downsampled_wfall,
+            aspect="auto",
+            interpolation="none",
+            vmin=vmin,
+            vmax=vmax,
+            cmap="viridis",  # You can change the color map here
+            origin="lower",
+            extent=[self.time_axis[0], self.time_axis[-1], freq_axis[0], freq_axis[-1]],
+        )
 
-        # Downsample the waterfall data and update other data-related processes
-        self.downsampled_wfall = downsample(wfall, factor_time, factor_freq)
+        axs[0].set_ylabel("Frequency (MHz)")
+        axs[0].set_title(global_settings.get("data_file"))
+        axs[0].tick_params(
+            axis="x", which="both", bottom=False, top=False, labelbottom=False
+        )
+
+        # Plot the Pulse Profile SNR
+        axs[1].plot(
+            self.time_axis, self.pulse_profile_snr, label="Pulse Profile SNR", color="k"
+        )
+        axs[1].set_xlabel("Time (s)")
+        axs[1].set_ylabel("Signal / Noise")
+        axs[1].legend(loc="upper right")
+        axs[1].grid(True)
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Save the figure
+        os.makedirs("results", exist_ok=True)
+        fig.savefig("results/inputs.pdf", bbox_inches="tight")
+
+        plt.close()
 
     def functional_posteriors(self):
         from fgivenx import plot_contours, plot_lines

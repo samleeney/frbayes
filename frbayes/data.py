@@ -19,9 +19,7 @@ def preprocess_data():
     data.close()
 
     # Replace NaN values with the median of the data
-    wfall[np.isnan(wfall)] = np.nanmedian(wfall)
-
-    # Extract required parameters
+    wfall[np.isnan(wfall)] = 0
 
     # Calculate the downsampling factors
     factor_freq = int(desired_freq_res / original_freq_res)
@@ -33,20 +31,11 @@ def preprocess_data():
     # Generate time axis labels for the downsampled data
     num_freq_bins, num_time_bins = wfall_downsampled.shape
     time_axis = np.arange(num_time_bins) * desired_time_res  # Time in seconds
-
-    # Identify the region where the signal is visible and calculate the pulse profile
-    signal_region_indices = (
-        np.nanpercentile(wfall_downsampled, 90, axis=1)
-        > np.nanmedian(wfall_downsampled)
-    ).nonzero()[0]
-    pulse_profile = np.nanmean(wfall_downsampled[signal_region_indices, :], axis=0)
-
-    # Calculate Pulse Profile SNR
-    pulse_profile_snr, _ = calculate_snr(wfall_downsampled, pulse_profile)
+    pulse_profile_snr = np.mean(wfall_downsampled, axis=0)
 
     # Save Pulse Profile SNR data to a CSV file
     os.makedirs("results", exist_ok=True)
     np.savetxt("results/pulse_profile_snr.csv", pulse_profile_snr, delimiter=",")
     np.savetxt("results/time_axis.csv", time_axis, delimiter=",")
 
-    return pulse_profile_snr, time_axis
+    return wfall_downsampled, pulse_profile_snr, time_axis
