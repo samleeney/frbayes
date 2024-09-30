@@ -24,17 +24,17 @@ def main():
     # Preprocess data
     data.preprocess_data()
 
-    # # Plot inputs
+    # # # Plot inputs
     frb_analysis = analysis.FRBAnalysis()
     frb_analysis.plot_inputs()
 
     # # Initialize the FRB model and run PolyChord
-    # frb_model = FRBModel()
-    # frb_model.run_polychord()
+    frb_model = FRBModel()
+    frb_model.run_polychord()
 
     # # Process chains with anesthetic using the frb_analysis instance
-    # frb_analysis.process_chains()
-    # frb_analysis.functional_posteriors()
+    frb_analysis.process_chains()
+    frb_analysis.functional_posteriors()
 
 
 if __name__ == "__main__":
