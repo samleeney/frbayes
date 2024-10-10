@@ -40,7 +40,7 @@ def main():
 
     # Initialize the analysis object and plot inputs
     frb_analysis = analysis.FRBAnalysis()
-    frb_analysis.plot_inputs()
+    # frb_analysis.plot_inputs()
 
     # Initialize the FRB model instance and run PolyChord sampler
     frb_model = FRBModel()

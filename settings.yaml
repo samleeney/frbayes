@@ -1,4 +1,4 @@
-data_file: "data/20191221A_original_data.h5"
+data_file: "/rds/user/sakl2/hpc-work/development/frbayes/data/20191221A_original_data.h5"
 original_freq_res: 24414.0625  # Hz
 original_time_res: 0.98304e-3  # s
 desired_freq_res: 3.125e6  # Hz
