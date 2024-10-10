@@ -24,7 +24,9 @@ def main():
     fit_pulses_ = global_settings.get("fit_pulses")
 
     # Set the model based on environment variable or default
-    global_settings.set("model", str(os.environ.get("MODEL_FRB") or "emg"))
+    global_settings.set(
+        "model", str(os.environ.get("MODEL_FRB") or "periodic_exponential")
+    )
     model_ = global_settings.get("model")
     print("The model is " + model_)
 
