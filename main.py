@@ -6,7 +6,7 @@ from frbayes.sample import FRBModel  # Import FRBModel class from frb_model.py
 
 def main():
     slurm_job_id = (
-        5
+        2
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )

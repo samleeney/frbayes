@@ -102,11 +102,11 @@ class FRBModel:
         theta = np.zeros_like(hypercube)
 
         # Transform and assign sorted values for amplitude A
-        uniform_prior = UniformPrior(0, 5)
+        uniform_prior = UniformPrior(0.001, 5)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])
 
         # Transform and assign sorted values for time constant tao
-        uniform_prior = UniformPrior(1, 5)
+        uniform_prior = UniformPrior(0.001, 5)
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )
@@ -119,7 +119,7 @@ class FRBModel:
 
         if global_settings.get("model") == "emg":
             # Transform and assign sorted values for width w
-            uniform_prior = UniformPrior(0, 5)
+            uniform_prior = UniformPrior(0.001, 5)
             theta[3 * self.max_peaks : 4 * self.max_peaks] = uniform_prior(
                 hypercube[3 * self.max_peaks : 4 * self.max_peaks]
             )
@@ -147,8 +147,8 @@ class FRBModel:
         output = pypolychord.run(
             self.loglikelihood,
             self.nDims,
-            nlive=self.nDims * 100,
-            num_repeats=self.nDims * 5,
+            # nlive=self.nDims * 50,
+            # num_repeats=self.nDims * 10,
             nDerived=nDerived,
             prior=self.prior,
             file_root=global_settings.get("file_root"),

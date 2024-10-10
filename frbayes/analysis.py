@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import h5py
 import os
 from frbayes.utils import downsample, calculate_snr
 from frbayes.data import preprocess_data
@@ -10,6 +9,7 @@ from anesthetic import read_chains, make_2d_axes
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from frbayes.models import emg, exponential
+import seaborn as sns
 
 # Activate the "science" style
 plt.style.use("science")
@@ -212,8 +212,8 @@ class FRBAnalysis:
         chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
         # Select a subset of parameter names to plot
-        if self.max_peaks > 3:
-            ptd = 3  # peaks to display
+        if self.max_peaks > 7:
+            ptd = 7  # peaks to display
         else:
             ptd = np.copy(self.max_peaks)
 
@@ -249,9 +249,10 @@ class FRBAnalysis:
             paramnames_amp += paramnames_Npulse
             paramnames_tao += paramnames_Npulse
             paramnames_u += paramnames_Npulse
-            paramnames_w += paramnames_Npulse
+            if global_settings.get("model") == "emg":
+                paramnames_w += paramnames_Npulse
 
-        # Create 2D plot axes ss
+        # Create 2D plot axes
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
         chains.plot_2d(ax)
@@ -292,3 +293,71 @@ class FRBAnalysis:
             fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
             plt.close()
             print("Done!")
+
+    def plot_peak_period_distribution(self):
+        """Plot the distribution of periods between predicted u values (peaks)."""
+        # Load the chains
+        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
+
+        # Extract and sort predicted u values from chains
+        u_columns = [f"$u_{{{i}}}$" for i in range(self.max_peaks)]
+        u_values = chains.loc[:, u_columns]
+
+        # Sort the u_values for each sample to ensure increasing order
+        u_values_sorted = np.sort(u_values.values, axis=1)
+
+        # Calculate the periods (differences between successive u values)
+        peak_periods = np.diff(
+            u_values_sorted, axis=1
+        )  # Shape: (n_samples, max_peaks - 1)
+
+        # Flatten the array for plotting
+        peak_periods_flat = peak_periods.flatten()
+
+        # Remove NaN and zero values
+        peak_periods_flat = peak_periods_flat[~np.isnan(peak_periods_flat)]
+        peak_periods_flat = peak_periods_flat[peak_periods_flat > 0]
+
+        # Calculate statistics
+        mean_period = np.mean(peak_periods_flat)
+        std_period = np.std(peak_periods_flat)
+
+        # Plot the probability distribution
+        plt.figure(figsize=(10, 6))
+        sns.histplot(peak_periods_flat, bins=50, kde=True, color="mediumseagreen")
+
+        # Add vertical lines for mean and 1-sigma deviations
+        plt.axvline(
+            mean_period,
+            color="green",
+            linestyle="--",
+            linewidth=2,
+            label=f"Mean: {mean_period:.2f} s",
+        )
+        plt.axvline(
+            mean_period - std_period,
+            color="lightgreen",
+            linestyle=":",
+            linewidth=2,
+            label=f"-1σ: {mean_period - std_period:.2f} s",
+        )
+        plt.axvline(
+            mean_period + std_period,
+            color="lightgreen",
+            linestyle=":",
+            linewidth=2,
+            label=f"+1σ: {mean_period + std_period:.2f} s",
+        )
+
+        plt.xlabel("Period between Peaks (s)")
+        plt.ylabel("Frequency")
+        plt.title("Distribution of Periods Between Predicted FRB Peaks")
+        plt.legend()
+        plt.grid(True)
+
+        # Save the plot
+        os.makedirs("results", exist_ok=True)
+        plt.savefig(f"results/{self.file_root}_peak_period_distribution.pdf")
+        plt.close()
+
+        print("Period distribution plot saved!")
