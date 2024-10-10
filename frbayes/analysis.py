@@ -1,61 +1,69 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from frbayes.utils import downsample, calculate_snr
-from frbayes.data import preprocess_data
 from frbayes.settings import global_settings
-import scienceplots
+from frbayes.data import preprocess_data
 from anesthetic import read_chains, make_2d_axes
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
-from frbayes.models import emg, exponential
+from frbayes.models import get_model
 import seaborn as sns
+import scienceplots
 
-# Activate the "science" style
+# Activate the "science" style for matplotlib
 plt.style.use("science")
 
 
 class FRBAnalysis:
+    """
+    Class for data analysis and result visualization.
+
+    This class handles the visualization of the inputs, processing of the PolyChord
+    chains, plotting of posterior distributions, and plotting of functional posteriors.
+
+    Attributes:
+        downsampled_wfall (array): Downsampled waterfall data.
+        pulse_profile_snr (array): Pulse profile SNR.
+        time_axis (array): Time axis corresponding to the data.
+        file_root (str): Root name for output files.
+        max_peaks (int): Maximum number of peaks to consider in the model.
+        fit_pulses (bool): Whether to fit the number of pulses (peaks).
+        model (BaseModel): The model instance used for analysis.
+        paramnames_all (list): List of parameter names for plotting.
+    """
+
     def __init__(self):
-        # Access settings globally instead of passing them
+        # Preprocess data and retrieve the necessary attributes
         self.downsampled_wfall, self.pulse_profile_snr, self.time_axis = (
             preprocess_data()
         )
         self.file_root = global_settings.get("file_root")
         self.max_peaks = global_settings.get("max_peaks")
+        self.fit_pulses = global_settings.get("fit_pulses")
 
-        # Define LaTeX-formatted parameter names
-        paramnames_all = []
-        for i in range(self.max_peaks):
-            paramnames_all.append(r"$A_{{{}}}$".format(i))
-        for i in range(self.max_peaks):
-            paramnames_all.append(r"$\tau_{{{}}}$".format(i))
-        for i in range(self.max_peaks):
-            paramnames_all.append(r"$u_{{{}}}$".format(i))
-        if global_settings.get("model") == "emg":
-            for i in range(self.max_peaks):
-                paramnames_all.append(r"$w_{{{}}}$".format(i))
-
-        paramnames_all.append(r"$\\sigma$")
-
-        if global_settings.get("fit_pulses") is True:
-            paramnames_all.append(r"$N_{\text{pulse}}$")
-
-        self.paramnames_all = paramnames_all
-        if global_settings.get("model") == "emg":
-            self.model = emg
-        elif global_settings.get("model") == "exponential":
-            self.model = exponential
+        # Initialize the model instance
+        model_name = global_settings.get("model")
+        self.model = get_model(model_name, global_settings)
+        self.paramnames_all = self.model.paramnames_all
 
     def plot_inputs(self):
-        """Plot inputs including the waterfall and pulse profile SNR."""
+        """
+        Plot the input data including the waterfall plot and pulse profile SNR.
+
+        This function generates and saves a figure with the waterfall plot on the top
+        and the pulse profile SNR on the bottom.
+        """
         # Define the min and max values for color scaling
         vmin = np.nanpercentile(self.downsampled_wfall, 1)
         vmax = np.nanpercentile(self.downsampled_wfall, 99)
 
-        # Generate frequency and time axis labels for the downsampled data
+        # Generate frequency axis labels for the downsampled data
         num_freq_bins, num_time_bins = self.downsampled_wfall.shape
-        freq_axis = np.linspace(400, 800, num_freq_bins)  # Frequency in MHz
+        freq_axis = np.linspace(
+            global_settings.get("freq_min"),
+            global_settings.get("freq_max"),
+            num_freq_bins,
+        )  # Frequency in MHz
 
         # Create subplots
         fig, axs = plt.subplots(
@@ -69,7 +77,7 @@ class FRBAnalysis:
             interpolation="none",
             vmin=vmin,
             vmax=vmax,
-            cmap="viridis",  # You can change the color map here
+            cmap="viridis",
             origin="lower",
             extent=[self.time_axis[0], self.time_axis[-1], freq_axis[0], freq_axis[-1]],
         )
@@ -95,47 +103,58 @@ class FRBAnalysis:
         # Save the figure
         os.makedirs("results", exist_ok=True)
         fig.savefig("results/inputs.pdf", bbox_inches="tight")
-
         plt.close()
 
     def functional_posteriors(self):
+        """
+        Plot the functional posteriors using samples from the model.
+
+        This function generates and saves a figure showing the posterior predictive
+        contours and lines, as well as the mean and standard deviation of the model
+        parameters overlaid on the data.
+        """
         from fgivenx import plot_contours, plot_lines
-        from frbayes.models import emg
 
-        def emgfgx(t, theta):
-            if global_settings.get("model") == "emg":
-                if global_settings.get("fit_pulses") is True:
-                    Npulse = theta[(4 * self.max_peaks) + 1]
-                else:
-                    Npulse = self.max_peaks
-            elif global_settings.get("model") == "exponential":
-                if global_settings.get("fit_pulses") is True:
-                    Npulse = theta[(3 * self.max_peaks) + 1]
-                else:
-                    Npulse = self.max_peaks
+        def model_function_wrapper(t, theta):
+            """
+            Wrapper function to compute the sum of model functions for given parameters.
 
+            Args:
+                t (array): Time axis.
+                theta (array): Model parameters.
+
+            Returns:
+                array: Summed model function evaluated at time t.
+            """
+            # Determine the number of pulses
+            if self.fit_pulses:
+                Npulse_index = self.model.nDims - 1
+                Npulse = int(theta[Npulse_index])
+            else:
+                Npulse = self.max_peaks
+
+            # Initialize the summed signal
             s = np.zeros((self.max_peaks, len(t)))
 
+            # Sum over the peaks
             for i in range(self.max_peaks):
                 if i < Npulse:
-                    if global_settings.get("model") == "emg":
-                        s[i] = self.model(t, theta, self.max_peaks, i)
-                    elif global_settings.get("model") == "exponential":
-                        s[i] = self.model(t, theta, self.max_peaks, i)
+                    s[i] = self.model.model_function(t, theta, i)
                 else:
                     s[i] = 0 * np.ones(len(t))
 
             return np.sum(s, axis=0)
 
+        # Create subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True, sharey=True)
 
         # Load the chains
         chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
-        # Plotting contours and lines
+        # Plot posterior predictive contours
         print("Plotting contours...")
         contour = plot_contours(
-            emgfgx,
+            model_function_wrapper,
             self.time_axis,
             chains,
             ax1,
@@ -145,11 +164,13 @@ class FRBAnalysis:
         ax1.set_ylabel("SNR")
         print("Done!")
 
+        # Colors for mean and std lines
         colors = plt.cm.viridis(np.linspace(0, 1, self.max_peaks))
 
-        for i in range(0, self.max_peaks):
-            mean = chains.loc[:, ["$u_{" + str(i) + "}$"]].mean()
-            std = chains.loc[:, ["$u_{" + str(i) + "}$"]].std()
+        # Plot mean and standard deviation for each peak
+        for i in range(self.max_peaks):
+            mean = chains.loc[:, [self.paramnames_all[2 * self.max_peaks + i]]].mean()
+            std = chains.loc[:, [self.paramnames_all[2 * self.max_peaks + i]]].std()
             color = colors[i]
 
             mean_value = float(mean.iloc[0])
@@ -163,8 +184,7 @@ class FRBAnalysis:
                 alpha=0.3,
             )
 
-            print(f"Mean is {mean_value}")
-            print(f"Standard dev is {std_value}")
+            print(f"Peak {i}: Mean = {mean_value}, Std Dev = {std_value}")
 
         # Create custom legend handles
         mean_handle = Line2D(
@@ -182,61 +202,51 @@ class FRBAnalysis:
         # Add legend to the plot
         ax1.legend(handles=[mean_handle, std_handle], loc="upper right")
 
+        # Plot posterior predictive lines
         print("Plotting lines...")
         lines = plot_lines(
-            emgfgx,
+            model_function_wrapper,
             self.time_axis,
             chains,
             ax2,
             weights=chains.get_weights(),
-            color="b",
+            color=self.model.color,
         )
-        ax2.set_xlabel("t")
+        ax2.set_xlabel("Time (s)")
         ax2.set_ylabel("SNR")
-
-        # Only show the shared y-label once
-        fig.text(0.04, 0.5, "SNR", va="center", rotation="vertical")
-        fig.tight_layout(rect=[0.05, 0, 1, 1])
-
-        plt.savefig(f"results/{self.file_root}_f_posterior_combined.pdf")
-        plt.ylim((0, 3))
-        plt.close()
         print("Done!")
 
+        # Adjust layout and save the figure
+        fig.tight_layout()
+        plt.savefig(f"results/{self.file_root}_f_posterior_combined.pdf")
+        plt.close()
+
     def process_chains(self):
-        """Process chains with anesthetic and plot posterior distributions."""
+        """
+        Process chains with anesthetic and plot posterior distributions.
+
+        This function generates and saves corner plots for subsets of parameters,
+        including amplitudes, time constants, locations, and any additional parameters.
+        """
         # Enable LaTeX rendering in matplotlib
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
 
+        # Load the chains
         chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
-        # Select a subset of parameter names to plot
-        if self.max_peaks > 7:
-            ptd = 7  # peaks to display
-        else:
-            ptd = np.copy(self.max_peaks)
+        # Determine number of peaks to display
+        ptd = min(self.max_peaks, 7)  # Peaks to display
 
+        # Build parameter subsets for plotting
         paramnames_subset = (
             self.paramnames_all[0:ptd]
             + self.paramnames_all[self.max_peaks : self.max_peaks + ptd]
             + self.paramnames_all[2 * self.max_peaks : 2 * self.max_peaks + ptd]
         )
-
-        if global_settings.get("model") == "emg":
-            dim = 4
-            paramnames_sigma = [self.paramnames_all[(dim * self.max_peaks)]]
-            paramnames_w = (
-                self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
-                + paramnames_sigma
-            )
-        elif global_settings.get("model") == "exponential":
-            dim = 3
-            paramnames_sigma = [self.paramnames_all[(dim * self.max_peaks)]]
-
-        paramnames_subset += self.paramnames_all[dim * self.max_peaks :]
+        paramnames_sigma = [self.paramnames_all[self.model.dim * self.max_peaks]]
         paramnames_amp = self.paramnames_all[0 : self.max_peaks] + paramnames_sigma
-        paramnames_tao = (
+        paramnames_tau = (
             self.paramnames_all[self.max_peaks : 2 * self.max_peaks] + paramnames_sigma
         )
         paramnames_u = (
@@ -244,24 +254,34 @@ class FRBAnalysis:
             + paramnames_sigma
         )
 
-        if global_settings.get("fit_pulses") is True:
-            paramnames_Npulse = [self.paramnames_all[(dim * self.max_peaks) + 1]]
+        # Include additional parameters based on the model
+        if isinstance(self.model, type(get_model("emg", global_settings))):
+            paramnames_w = (
+                self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
+                + paramnames_sigma
+            )
+            paramnames_subset += paramnames_w[0:ptd]
+
+        if self.fit_pulses:
+            paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
             paramnames_amp += paramnames_Npulse
-            paramnames_tao += paramnames_Npulse
+            paramnames_tau += paramnames_Npulse
             paramnames_u += paramnames_Npulse
-            if global_settings.get("model") == "emg":
+            if isinstance(self.model, type(get_model("emg", global_settings))):
                 paramnames_w += paramnames_Npulse
 
-        # Create 2D plot axes
+        # Plot subsets of parameters
+        os.makedirs("results", exist_ok=True)
+
+        # Subset plot
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
         chains.plot_2d(ax)
-        os.makedirs("results", exist_ok=True)
         fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
         plt.close()
         print("Done!")
 
-        # Create 2D plot axes for amplitude
+        # Amplitude plot
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
         print("Plot amplitude...")
         chains.plot_2d(ax)
@@ -269,15 +289,15 @@ class FRBAnalysis:
         plt.close()
         print("Done!")
 
-        # Create 2D plot axes for tao
-        fig, ax = make_2d_axes(paramnames_tao, figsize=(6, 6))
-        print("Plot tao...")
+        # Time constant plot
+        fig, ax = make_2d_axes(paramnames_tau, figsize=(6, 6))
+        print("Plot tau...")
         chains.plot_2d(ax)
-        fig.savefig(f"results/{self.file_root}_tao_posterior.pdf")
+        fig.savefig(f"results/{self.file_root}_tau_posterior.pdf")
         plt.close()
         print("Done!")
 
-        # Create 2D plot axes for u
+        # Location (u) plot
         fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
         print("Plot u...")
         chains.plot_2d(ax)
@@ -285,8 +305,8 @@ class FRBAnalysis:
         plt.close()
         print("Done!")
 
-        # Create 2D plot axes for w
-        if global_settings.get("model") == "emg":
+        # Width plot (for EMG model)
+        if isinstance(self.model, type(get_model("emg", global_settings))):
             fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
             print("Plot w...")
             chains.plot_2d(ax)
@@ -295,12 +315,19 @@ class FRBAnalysis:
             print("Done!")
 
     def plot_peak_period_distribution(self):
-        """Plot the distribution of periods between predicted u values (peaks)."""
+        """
+        Plot the distribution of periods between predicted peak locations (u values).
+
+        This function generates and saves a histogram of the time differences between
+        successive peaks, along with the mean and standard deviation.
+        """
         # Load the chains
         chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
         # Extract and sort predicted u values from chains
-        u_columns = [f"$u_{{{i}}}$" for i in range(self.max_peaks)]
+        u_columns = [
+            self.paramnames_all[2 * self.max_peaks + i] for i in range(self.max_peaks)
+        ]
         u_values = chains.loc[:, u_columns]
 
         # Sort the u_values for each sample to ensure increasing order
@@ -351,7 +378,7 @@ class FRBAnalysis:
 
         plt.xlabel("Period between Peaks (s)")
         plt.ylabel("Frequency")
-        plt.title("Distribution of Periods Between Predicted FRB Peaks")
+        plt.title("Distribution of Periods Between Predicted Peaks")
         plt.legend()
         plt.grid(True)
 
