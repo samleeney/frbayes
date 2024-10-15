@@ -282,12 +282,12 @@ class PeriodicExponentialModel(BaseModel):
 
     def __init__(self, settings):
         super().__init__(settings)
-        self.dim = 3  # 2 params per peak
+        self.dim = 2  # 2 params per peak
         self.color = "purple"  # Unique color for plotting
         self._setup_parameters()
 
     def _setup_parameters(self):
-        self.nDims = self.max_peaks * 2 + 3  # A*npeak, tau*npeak, u0, T, sigma
+        self.nDims = self.max_peaks * self.dim + 3  # A*npeak, tau*npeak, u0, T, sigma
         if self.fit_pulses:
             self.nDims += 1  # +1 for Npulse
 
@@ -325,7 +325,7 @@ class PeriodicExponentialModel(BaseModel):
         uniform_prior_u0 = UniformPrior(0.001, 3.9)
         theta[2 * self.max_peaks] = uniform_prior_u0(hypercube[2 * self.max_peaks])
 
-        uniform_prior_T = UniformPrior(0, 3.9)
+        uniform_prior_T = UniformPrior(0.001, 3.9)
         theta[2 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[2 * self.max_peaks + 1]
         )
@@ -374,12 +374,12 @@ class PeriodicEMGModel(BaseModel):
 
     def __init__(self, settings):
         super().__init__(settings)
-        self.dim = 4  # A, tau, u0, w
+        self.dim = 3  # A, tau, w
         self.color = "orange"  # Unique color for plotting
         self._setup_parameters()
 
     def _setup_parameters(self):
-        self.nDims = self.max_peaks * 3 + 2  # A, tau, w, u0, T
+        self.nDims = self.max_peaks * self.dim + 3  # A, tau, w, u0, T, sigma
         if self.fit_pulses:
             self.nDims += 1  # +1 for Npulse
 
@@ -422,12 +422,10 @@ class PeriodicEMGModel(BaseModel):
             hypercube[2 * self.max_peaks : 3 * self.max_peaks]
         )
 
-        sorted_uniform_prior_u0 = SortedUniformPrior(0.001, 3.9)
-        theta[3 * self.max_peaks] = sorted_uniform_prior_u0(
-            hypercube[3 * self.max_peaks]
-        )
+        uniform_prior_u0 = UniformPrior(0.001, 3.9)
+        theta[3 * self.max_peaks] = uniform_prior_u0(hypercube[3 * self.max_peaks])
 
-        uniform_prior_T = UniformPrior(0, get_time_range())
+        uniform_prior_T = UniformPrior(0.001, 1.5)
         theta[3 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[3 * self.max_peaks + 1]
         )
