@@ -136,7 +136,7 @@ class EMGModel(BaseModel):
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )
-        sorted_uniform_prior = SortedUniformPrior(0.001, 3.9)
+        sorted_uniform_prior = SortedUniformPrior(0.001, 4)
         theta[2 * self.max_peaks : 3 * self.max_peaks] = sorted_uniform_prior(
             hypercube[2 * self.max_peaks : 3 * self.max_peaks]
         )
@@ -233,7 +233,7 @@ class ExponentialModel(BaseModel):
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )
-        sorted_uniform_prior = SortedUniformPrior(0.001, 3.9)
+        sorted_uniform_prior = SortedUniformPrior(0.001, 4)
         theta[2 * self.max_peaks : 3 * self.max_peaks] = sorted_uniform_prior(
             hypercube[2 * self.max_peaks : 3 * self.max_peaks]
         )
@@ -316,17 +316,17 @@ class PeriodicExponentialModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 5)
+        uniform_prior = UniformPrior(0.001, 4)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )
 
-        uniform_prior_u0 = UniformPrior(0.001, 3.9 / self.max_peaks)
+        uniform_prior_u0 = UniformPrior(0.001, 4 / self.max_peaks)
         theta[2 * self.max_peaks] = uniform_prior_u0(hypercube[2 * self.max_peaks])
 
         uniform_prior_T = UniformPrior(
-            0.001, 3.9 / self.max_peaks
+            0.001, 4 / self.max_peaks
         )  # Only allow periods that fit within the data
         theta[2 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[2 * self.max_peaks + 1]
@@ -424,11 +424,11 @@ class PeriodicEMGModel(BaseModel):
             hypercube[2 * self.max_peaks : 3 * self.max_peaks]
         )
 
-        uniform_prior_u0 = UniformPrior(0.001, 3.9)
+        uniform_prior_u0 = UniformPrior(0.001, 4)
         theta[3 * self.max_peaks] = uniform_prior_u0(hypercube[3 * self.max_peaks])
 
         uniform_prior_T = UniformPrior(
-            0.001, 3.9 / self.max_peaks
+            0.001, 4 / self.max_peaks
         )  # Only allow periods that fit within the data
         theta[3 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[3 * self.max_peaks + 1]
