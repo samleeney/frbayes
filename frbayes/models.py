@@ -131,7 +131,7 @@ class EMGModel(BaseModel):
         """
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 5)
+        uniform_prior = UniformPrior(0.001, 1)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
@@ -228,7 +228,7 @@ class ExponentialModel(BaseModel):
         """
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 5)
+        uniform_prior = UniformPrior(0.001, 1)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
@@ -316,7 +316,7 @@ class PeriodicExponentialModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 4)
+        uniform_prior = UniformPrior(0.001, 1)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
@@ -415,7 +415,7 @@ class PeriodicEMGModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 5)
+        uniform_prior = UniformPrior(0.001, 1)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
             hypercube[self.max_peaks : 2 * self.max_peaks]
