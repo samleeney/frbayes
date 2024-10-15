@@ -322,10 +322,12 @@ class PeriodicExponentialModel(BaseModel):
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )
 
-        uniform_prior_u0 = UniformPrior(0.001, 3.9)
+        uniform_prior_u0 = UniformPrior(0.001, 3.9 / self.max_peaks)
         theta[2 * self.max_peaks] = uniform_prior_u0(hypercube[2 * self.max_peaks])
 
-        uniform_prior_T = UniformPrior(0.001, 3.9)
+        uniform_prior_T = UniformPrior(
+            0.001, 3.9 / self.max_peaks
+        )  # Only allow periods that fit within the data
         theta[2 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[2 * self.max_peaks + 1]
         )
@@ -425,7 +427,9 @@ class PeriodicEMGModel(BaseModel):
         uniform_prior_u0 = UniformPrior(0.001, 3.9)
         theta[3 * self.max_peaks] = uniform_prior_u0(hypercube[3 * self.max_peaks])
 
-        uniform_prior_T = UniformPrior(0.001, 1.5)
+        uniform_prior_T = UniformPrior(
+            0.001, 3.9 / self.max_peaks
+        )  # Only allow periods that fit within the data
         theta[3 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[3 * self.max_peaks + 1]
         )
