@@ -322,7 +322,6 @@ class FRBAnalysis:
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
         plt.close()
-        print("Done!")
 
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
         print("Plot amplitude...")
@@ -330,7 +329,6 @@ class FRBAnalysis:
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_amp_posterior.pdf")
         plt.close()
-        print("Done!")
 
         fig, ax = make_2d_axes(paramnames_tau, figsize=(6, 6))
         print("Plot tau...")
@@ -338,7 +336,6 @@ class FRBAnalysis:
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_tau_posterior.pdf")
         plt.close()
-        print("Done!")
 
         fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
         print("Plot u...")
@@ -346,7 +343,6 @@ class FRBAnalysis:
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_u_posterior.pdf")
         plt.close()
-        print("Done!")
 
         if paramnames_w:
             fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
@@ -355,7 +351,6 @@ class FRBAnalysis:
             ax.tick_params(axis="both", which="major", labelsize=12)
             fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
             plt.close()
-            print("Done!")
 
         if self.is_periodic_model:
             self.plot_period_distribution(chains)
@@ -411,7 +406,7 @@ class FRBAnalysis:
             plt.savefig(f"results/{self.file_root}_period_distribution.pdf")
             plt.close()
 
-            print("Period T distribution plot saved!")
+            print("Plotting T...")
         else:
             print("Model is not periodic; period distribution plot not generated.")
 
@@ -457,7 +452,6 @@ class FRBAnalysis:
             linewidth=1,
             alpha=0.7,
         )
-        print("Done.")
 
         ax.set_xlabel("Time (s)", fontsize=14)
         ax.set_ylabel("Signal / Noise", fontsize=14)
@@ -470,6 +464,4 @@ class FRBAnalysis:
         plt.savefig(f"results/{self.file_root}_overlay_predictions_on_snr.pdf")
         plt.close()
 
-        print(
-            f"Overlay plot saved as 'results/{self.file_root}_overlay_predictions_on_snr.pdf'."
-        )
+        print("Plotting done!")
