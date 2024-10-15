@@ -14,7 +14,7 @@ def main():
     """
     # Handle SLURM job ID or default to 2
     slurm_job_id = (
-        2
+        4
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
@@ -24,12 +24,11 @@ def main():
     fit_pulses_ = global_settings.get("fit_pulses")
 
     # Set the model based on environment variable or default
-    global_settings.set(
-        "model", str(os.environ.get("MODEL_FRB") or "periodic_exponential")
-    )
+    model_from_env = os.environ.get("MODEL_FRB")
+    if model_from_env is not None:
+        global_settings.set("model", model_from_env)
     model_ = global_settings.get("model")
     print("The model is " + model_)
-
     # Update settings with the maximum number of peaks and file root
     global_settings.set("max_peaks", int(slurm_job_id))
     global_settings.set(
@@ -51,6 +50,7 @@ def main():
     # Process chains and generate functional posteriors
     frb_analysis.process_chains()
     frb_analysis.functional_posteriors()
+    frb_analysis.overlay_predictions_on_input()
 
 
 if __name__ == "__main__":
