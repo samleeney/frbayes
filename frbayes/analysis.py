@@ -4,6 +4,7 @@ import os
 from frbayes.settings import global_settings
 from frbayes.data import preprocess_data
 from anesthetic import read_chains, make_2d_axes
+from anesthetic.plot import hist_plot_1d
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from frbayes.models import get_model
@@ -40,21 +41,24 @@ class FRBAnalysis:
         self.fit_pulses = global_settings.get("fit_pulses")
 
         model_name = global_settings.get("model")
-        print(f"Model name retrieved: {model_name}")  # Debug print to check model name
+        print(f"Model name retrieved: {model_name}")
 
-        # Convert model name to lower case to match dictionary keys
-        model_key = model_name.strip().lower()  # Normalize for consistent referencing
+        self.model_name = model_name.strip().lower()
 
         self.model = get_model(model_name, global_settings)
         self.paramnames_all = self.model.paramnames_all
 
-        # Safely retrieve color map and color
-        if model_key in MODEL_COLOR_MAPS:
-            self.model_color_map = MODEL_COLOR_MAPS[model_key]
-            self.model_color = MODEL_COLORS[model_key]
+        self.is_periodic_model = self.model_name in [
+            "periodic_exponential",
+            "periodic_emg",
+        ]
+
+        if self.model_name in MODEL_COLOR_MAPS:
+            self.model_color_map = MODEL_COLOR_MAPS[self.model_name]
+            self.model_color = MODEL_COLORS[self.model_name]
         else:
             raise KeyError(
-                f"Model color map for '{model_key}' not found. Available keys: {list(MODEL_COLOR_MAPS.keys())}"
+                f"Model color map for '{self.model_name}' not found. Available keys: {list(MODEL_COLOR_MAPS.keys())}"
             )
 
         print(f"Using color map: {self.model_color_map} for model: {model_name}")
@@ -85,8 +89,8 @@ class FRBAnalysis:
             extent=[self.time_axis[0], self.time_axis[-1], freq_axis[0], freq_axis[-1]],
         )
 
-        axs[0].set_ylabel("Frequency (MHz)")
-        axs[0].set_title(global_settings.get("data_file"))
+        axs[0].set_ylabel("Frequency (MHz)", fontsize=14)
+        axs[0].tick_params(axis="both", which="major", labelsize=12)
         axs[0].tick_params(
             axis="x", which="both", bottom=False, top=False, labelbottom=False
         )
@@ -97,9 +101,10 @@ class FRBAnalysis:
             label="Pulse Profile SNR",
             color=self.model_color,  # Use model-specific color
         )
-        axs[1].set_xlabel("Time (s)")
-        axs[1].set_ylabel("Signal / Noise")
+        axs[1].set_xlabel("Time (s)", fontsize=14)
+        axs[1].set_ylabel("Signal / Noise", fontsize=14)
         axs[1].legend(loc="upper right")
+        axs[1].tick_params(axis="both", which="major", labelsize=12)
         axs[1].grid(True)
 
         plt.tight_layout()
@@ -138,28 +143,56 @@ class FRBAnalysis:
             weights=chains.get_weights(),
             colors=self.model_color_map,
         )
-        ax1.set_ylabel("SNR")
+        ax1.set_ylabel("SNR", fontsize=14)
+        ax1.tick_params(axis="both", which="major", labelsize=12)
         print("Done!")
 
         colors = plt.cm.viridis(np.linspace(0, 1, self.max_peaks))
 
-        for i in range(self.max_peaks):
-            mean = chains.loc[:, [self.paramnames_all[2 * self.max_peaks + i]]].mean()
-            std = chains.loc[:, [self.paramnames_all[2 * self.max_peaks + i]]].std()
-            color = colors[i]
+        if self.is_periodic_model:
+            period_param_index = self.model.dim * self.max_peaks + 1
+            u0_param_index = self.model.dim * self.max_peaks
+            period_chain = chains.iloc[:, period_param_index]
+            u0_chain = chains.iloc[:, u0_param_index]
+            u_mean = u0_chain.mean()
+            period_mean = period_chain.mean()
+            period_std = period_chain.std()
 
-            mean_value = float(mean.iloc[0])
-            std_value = float(std.iloc[0])
+            # Plot u_0 + nT lines and spans
+            for i in range(self.max_peaks):
+                u_n = u0_chain + i * period_chain
+                mean = u_n.mean()
+                std = u_n.std()
+                color = colors[i]
 
-            ax1.axvline(mean_value, color=color, linestyle="-", linewidth=2)
-            ax1.axvspan(
-                mean_value - std_value * 0.5,
-                mean_value + std_value * 0.5,
-                color=color,
-                alpha=0.3,
-            )
+                ax1.axvline(mean, color=color, linestyle="-", linewidth=2)
+                ax1.axvspan(
+                    mean - std * 0.5,
+                    mean + std * 0.5,
+                    color=color,
+                    alpha=0.3,
+                )
+                print(f"u_{i}: Mean = {mean}, Std Dev = {std}")
+        else:
+            for i in range(self.max_peaks):
+                mean = chains.loc[
+                    :, [self.paramnames_all[2 * self.max_peaks + i]]
+                ].mean()
+                std = chains.loc[:, [self.paramnames_all[2 * self.max_peaks + i]]].std()
+                color = colors[i]
 
-            print(f"Peak {i}: Mean = {mean_value}, Std Dev = {std_value}")
+                mean_value = float(mean.iloc[0])
+                std_value = float(std.iloc[0])
+
+                ax1.axvline(mean_value, color=color, linestyle="-", linewidth=2)
+                ax1.axvspan(
+                    mean_value - std_value * 0.5,
+                    mean_value + std_value * 0.5,
+                    color=color,
+                    alpha=0.3,
+                )
+
+                print(f"Peak {i}: Mean = {mean_value}, Std Dev = {std_value}")
 
         mean_handle = Line2D(
             [0],
@@ -184,8 +217,9 @@ class FRBAnalysis:
             weights=chains.get_weights(),
             color=self.model_color,
         )
-        ax2.set_xlabel("Time (s)")
-        ax2.set_ylabel("SNR")
+        ax2.set_xlabel("Time (s)", fontsize=14)
+        ax2.set_ylabel("SNR", fontsize=14)
+        ax2.tick_params(axis="both", which="major", labelsize=12)
         print("Done!")
 
         fig.tight_layout()
@@ -198,46 +232,94 @@ class FRBAnalysis:
 
         chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
 
-        ptd = min(self.max_peaks, 7)
+        ptd = min(self.max_peaks, 7)  # Plot up to 7 peaks
 
-        paramnames_sigma = [self.paramnames_all[self.model.dim * self.max_peaks]]
-        paramnames_subset = (
-            self.paramnames_all[0:ptd]
-            + self.paramnames_all[self.max_peaks : self.max_peaks + ptd]
-            + self.paramnames_all[2 * self.max_peaks : 2 * self.max_peaks + ptd]
-            + paramnames_sigma
-        )
-        paramnames_amp = self.paramnames_all[0 : self.max_peaks] + paramnames_sigma
-        paramnames_tau = (
-            self.paramnames_all[self.max_peaks : 2 * self.max_peaks] + paramnames_sigma
-        )
-        paramnames_u = (
-            self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
-            + paramnames_sigma
-        )
-        paramnames_periodic = [self.paramnames_all[3 * self.max_peaks]]
+        # Initialize parameter names lists
+        paramnames_A = []
+        paramnames_tau = []
+        paramnames_u = []
+        paramnames_w = []
+        paramnames_sigma = []
+        paramnames_u0 = []
+        paramnames_T = []
+        paramnames_Npulse = []
 
-        if isinstance(self.model, type(get_model("emg", global_settings))):
-            paramnames_w = (
-                self.paramnames_all[3 * self.max_peaks : 4 * self.max_peaks]
+        # Assign parameter names based on the model
+        if self.is_periodic_model:
+            # For periodic models
+            dim = self.model.dim
+            paramnames_A = self.paramnames_all[: self.max_peaks]
+            paramnames_tau = self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
+
+            paramnames_u0 = [self.paramnames_all[2 * self.max_peaks]]
+            paramnames_T = [self.paramnames_all[2 * self.max_peaks + 1]]
+            paramnames_sigma = [self.paramnames_all[2 * self.max_peaks + 2]]
+
+            if self.fit_pulses:
+                paramnames_Npulse = [self.paramnames_all[2 * self.max_peaks + 3]]
+
+            if isinstance(self.model, type(get_model("periodic_emg", global_settings))):
+                paramnames_w = self.paramnames_all[
+                    2 * self.max_peaks : 3 * self.max_peaks
+                ]
+                paramnames_u0 = [self.paramnames_all[3 * self.max_peaks]]
+                paramnames_T = [self.paramnames_all[3 * self.max_peaks + 1]]
+                paramnames_sigma = [self.paramnames_all[3 * self.max_peaks + 2]]
+
+                if self.fit_pulses:
+                    paramnames_Npulse = [self.paramnames_all[3 * self.max_peaks + 3]]
+
+            # Construct parameter groups
+            paramnames_subset = (
+                paramnames_A[:ptd]
+                + paramnames_tau[:ptd]
+                + paramnames_u0
+                + paramnames_T
                 + paramnames_sigma
+                + paramnames_Npulse
             )
-            paramnames_subset += paramnames_w[0:ptd]
+            paramnames_amp = paramnames_A + paramnames_sigma + paramnames_Npulse
+            paramnames_tau = paramnames_tau + paramnames_sigma + paramnames_Npulse
+            paramnames_u = (
+                paramnames_u0 + paramnames_T + paramnames_sigma + paramnames_Npulse
+            )
+            if paramnames_w:
+                paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
+        else:
+            # For non-periodic models
+            paramnames_A = self.paramnames_all[: self.max_peaks]
+            paramnames_tau = self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
+            paramnames_u = self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
+            paramnames_sigma = [self.paramnames_all[self.model.dim * self.max_peaks]]
 
-        if self.fit_pulses:
-            paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
-            paramnames_amp += paramnames_Npulse
-            paramnames_tau += paramnames_Npulse
-            paramnames_u += paramnames_Npulse
+            if self.fit_pulses:
+                paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
+
             if isinstance(self.model, type(get_model("emg", global_settings))):
-                paramnames_w += paramnames_Npulse
-            paramnames_periodic += paramnames_Npulse
+                paramnames_w = self.paramnames_all[
+                    3 * self.max_peaks : 4 * self.max_peaks
+                ]
+
+            # Construct parameter groups
+            paramnames_subset = (
+                paramnames_A[:ptd]
+                + paramnames_tau[:ptd]
+                + paramnames_u[:ptd]
+                + paramnames_sigma
+                + paramnames_Npulse
+            )
+            paramnames_amp = paramnames_A + paramnames_sigma + paramnames_Npulse
+            paramnames_tau = paramnames_tau + paramnames_sigma + paramnames_Npulse
+            paramnames_u = paramnames_u + paramnames_sigma + paramnames_Npulse
+            if paramnames_w:
+                paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
 
         os.makedirs("results", exist_ok=True)
 
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
         chains.plot_2d(ax, color=self.model_color)
+        ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
         plt.close()
         print("Done!")
@@ -245,6 +327,7 @@ class FRBAnalysis:
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
         print("Plot amplitude...")
         chains.plot_2d(ax, color=self.model_color)
+        ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_amp_posterior.pdf")
         plt.close()
         print("Done!")
@@ -252,6 +335,7 @@ class FRBAnalysis:
         fig, ax = make_2d_axes(paramnames_tau, figsize=(6, 6))
         print("Plot tau...")
         chains.plot_2d(ax, color=self.model_color)
+        ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_tau_posterior.pdf")
         plt.close()
         print("Done!")
@@ -259,67 +343,133 @@ class FRBAnalysis:
         fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
         print("Plot u...")
         chains.plot_2d(ax, color=self.model_color)
+        ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(f"results/{self.file_root}_u_posterior.pdf")
         plt.close()
         print("Done!")
 
-        if isinstance(self.model, type(get_model("emg", global_settings))):
+        if paramnames_w:
             fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
             print("Plot w...")
             chains.plot_2d(ax, color=self.model_color)
+            ax.tick_params(axis="both", which="major", labelsize=12)
             fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
             plt.close()
             print("Done!")
 
-        if any(
-            isinstance(self.model, model_type)
-            for model_type in [
-                type(get_model("periodic_exponential", global_settings)),
-                type(get_model("periodic_emg", global_settings)),
-            ]
-        ):
+        if self.is_periodic_model:
             self.plot_period_distribution(chains)
 
     def plot_period_distribution(self, chains):
-        period_param_name = self.paramnames_all[self.max_peaks * self.model.dim]
-        period_values = chains[period_param_name].values
+        if self.is_periodic_model:
+            if self.model_name == "periodic_exponential":
+                period_param_index = 2 * self.max_peaks + 1
+            elif self.model_name == "periodic_emg":
+                period_param_index = 3 * self.max_peaks + 1
+            else:
+                raise ValueError("Invalid model name for periodic model.")
 
-        mean_period = np.mean(period_values)
-        std_period = np.std(period_values)
+            period_param_name = self.paramnames_all[period_param_index]
+            period_chain = chains[period_param_name]
 
-        plt.figure(figsize=(10, 6))
-        sns.histplot(period_values, bins=50, kde=True, color=self.model_color)
+            mean_period = period_chain.mean()
+            std_period = period_chain.std()
 
-        plt.axvline(
-            mean_period,
-            color="green",
-            linestyle="--",
-            linewidth=2,
-            label=f"Mean: {mean_period:.2f} s",
+            # Plot using anesthetic
+            fig, ax = plt.subplots(figsize=(10, 6))
+            hist_plot_1d(
+                ax, period_chain, weights=chains.get_weights(), color=self.model_color
+            )
+            ax.axvline(
+                mean_period,
+                color="green",
+                linestyle="--",
+                linewidth=2,
+                label=f"Mean: {mean_period:.2f} s",
+            )
+            ax.axvline(
+                mean_period - std_period,
+                color="lightgreen",
+                linestyle=":",
+                linewidth=2,
+                label=rf"-1$\sigma$: {mean_period - std_period:.2f} s",
+            )
+            ax.axvline(
+                mean_period + std_period,
+                color="lightgreen",
+                linestyle=":",
+                linewidth=2,
+                label=rf"+1$\sigma$: {mean_period + std_period:.2f} s",
+            )
+
+            ax.set_xlabel("Period (T) (s)", fontsize=14)
+            ax.set_ylabel("Probability Density", fontsize=14)
+            ax.tick_params(axis="both", which="major", labelsize=12)
+            ax.legend(fontsize=12)
+            plt.tight_layout()
+            os.makedirs("results", exist_ok=True)
+            plt.savefig(f"results/{self.file_root}_period_distribution.pdf")
+            plt.close()
+
+            print("Period T distribution plot saved!")
+        else:
+            print("Model is not periodic; period distribution plot not generated.")
+
+    def overlay_predictions_on_input(self):
+        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        ax.plot(
+            self.time_axis,
+            self.pulse_profile_snr,
+            label="Pulse Profile SNR",
+            color="black",
+            linewidth=1.5,
+            alpha=0.8,
         )
-        plt.axvline(
-            mean_period - std_period,
-            color="lightgreen",
-            linestyle=":",
-            linewidth=2,
-            label=rf"-1$\sigma$: {mean_period - std_period:.2f} s",
-        )
-        plt.axvline(
-            mean_period + std_period,
-            color="lightgreen",
-            linestyle=":",
-            linewidth=2,
-            label=rf"+1$\sigma$: {mean_period + std_period:.2f} s",
-        )
 
-        plt.xlabel("Period (T) (s)")
-        plt.ylabel("Frequency")
-        plt.title("Distribution of Period Parameter")
-        plt.legend()
-        plt.grid(True)
+        def model_function_wrapper(t, theta):
+            if self.fit_pulses:
+                Npulse_index = self.model.nDims - 1
+                Npulse = int(theta[Npulse_index])
+            else:
+                Npulse = self.max_peaks
+
+            s = np.zeros((self.max_peaks, len(t)))
+
+            for i in range(self.max_peaks):
+                if i < Npulse:
+                    s[i] = self.model.model_function(t, theta, i)
+                else:
+                    s[i] = 0 * np.ones(len(t))
+
+            return np.sum(s, axis=0)
+
+        print("Overlaying predictions on pulse profile SNR...")
+        plot_lines(
+            model_function_wrapper,
+            self.time_axis,
+            chains,
+            ax,
+            weights=chains.get_weights(),
+            color=self.model_color,
+            linewidth=1,
+            alpha=0.7,
+        )
+        print("Done.")
+
+        ax.set_xlabel("Time (s)", fontsize=14)
+        ax.set_ylabel("Signal / Noise", fontsize=14)
+        ax.tick_params(axis="both", which="major", labelsize=12)
+        ax.legend()
+        ax.grid(True)
+        plt.tight_layout()
 
         os.makedirs("results", exist_ok=True)
-        plt.savefig(f"results/{self.file_root}_period_distribution.pdf")
+        plt.savefig(f"results/{self.file_root}_overlay_predictions_on_snr.pdf")
         plt.close()
 
-        print("Period distribution plot saved!")
+        print(
+            f"Overlay plot saved as 'results/{self.file_root}_overlay_predictions_on_snr.pdf'."
+        )
