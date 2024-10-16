@@ -65,7 +65,7 @@ class FRBAnalysis:
 
         # Set results directory based on base_dir and file_root
         base_dir = global_settings.get("base_dir")
-        self.results_dir = os.path.join(base_dir, self.file_root, "results")
+        self.results_dir = os.path.join(base_dir, "results")
         os.makedirs(self.results_dir, exist_ok=True)
 
     def plot_inputs(self):
