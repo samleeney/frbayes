@@ -424,7 +424,7 @@ class PeriodicEMGModel(BaseModel):
             hypercube[2 * self.max_peaks : 3 * self.max_peaks]
         )
 
-        uniform_prior_u0 = UniformPrior(0.001, 4)
+        uniform_prior_u0 = UniformPrior(0.001, 4 / self.max_peaks)
         theta[3 * self.max_peaks] = uniform_prior_u0(hypercube[3 * self.max_peaks])
 
         uniform_prior_T = UniformPrior(
