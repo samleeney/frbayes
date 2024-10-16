@@ -71,6 +71,7 @@ class FRBModel:
             self.loglikelihood,
             self.nDims,
             nDerived=nDerived,
+            base_dir=global_settings.get("base_dir"),
             prior=self.prior,
             file_root=global_settings.get("file_root"),
             do_clustering=True,
