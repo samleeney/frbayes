@@ -63,6 +63,11 @@ class FRBAnalysis:
 
         print(f"Using color map: {self.model_color_map} for model: {model_name}")
 
+        # Set results directory based on base_dir and file_root
+        base_dir = global_settings.get("base_dir")
+        self.results_dir = os.path.join(base_dir, self.file_root, "results")
+        os.makedirs(self.results_dir, exist_ok=True)
+
     def plot_inputs(self):
         vmin = np.nanpercentile(self.downsampled_wfall, 1)
         vmax = np.nanpercentile(self.downsampled_wfall, 99)
@@ -108,8 +113,7 @@ class FRBAnalysis:
         axs[1].grid(True)
 
         plt.tight_layout()
-        os.makedirs("results", exist_ok=True)
-        fig.savefig("results/inputs.pdf", bbox_inches="tight")
+        fig.savefig(os.path.join(self.results_dir, "inputs.pdf"), bbox_inches="tight")
         plt.close()
 
     def functional_posteriors(self):
@@ -132,7 +136,10 @@ class FRBAnalysis:
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True, sharey=True)
 
-        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
+        chains = read_chains(
+            os.path.join(global_settings.get("base_dir"), self.file_root),
+            columns=self.paramnames_all,
+        )
 
         print("Plotting contours...")
         plot_contours(
@@ -223,14 +230,19 @@ class FRBAnalysis:
         print("Done!")
 
         fig.tight_layout()
-        plt.savefig(f"results/{self.file_root}_f_posterior_combined.pdf")
+        plt.savefig(
+            os.path.join(self.results_dir, f"{self.file_root}_f_posterior_combined.pdf")
+        )
         plt.close()
 
     def process_chains(self):
         plt.rc("text", usetex=True)
         plt.rc("font", family="serif")
 
-        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
+        chains = read_chains(
+            os.path.join(global_settings.get("base_dir"), self.file_root),
+            columns=self.paramnames_all,
+        )
 
         ptd = min(self.max_peaks, 7)  # Plot up to 7 peaks
 
@@ -314,34 +326,38 @@ class FRBAnalysis:
             if paramnames_w:
                 paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
 
-        os.makedirs("results", exist_ok=True)
-
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
-        fig.savefig(f"results/{self.file_root}_ss_posterior.pdf")
+        fig.savefig(
+            os.path.join(self.results_dir, f"{self.file_root}_ss_posterior.pdf")
+        )
         plt.close()
 
         fig, ax = make_2d_axes(paramnames_amp, figsize=(6, 6))
         print("Plot amplitude...")
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
-        fig.savefig(f"results/{self.file_root}_amp_posterior.pdf")
+        fig.savefig(
+            os.path.join(self.results_dir, f"{self.file_root}_amp_posterior.pdf")
+        )
         plt.close()
 
         fig, ax = make_2d_axes(paramnames_tau, figsize=(6, 6))
         print("Plot tau...")
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
-        fig.savefig(f"results/{self.file_root}_tau_posterior.pdf")
+        fig.savefig(
+            os.path.join(self.results_dir, f"{self.file_root}_tau_posterior.pdf")
+        )
         plt.close()
 
         fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
         print("Plot u...")
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
-        fig.savefig(f"results/{self.file_root}_u_posterior.pdf")
+        fig.savefig(os.path.join(self.results_dir, f"{self.file_root}_u_posterior.pdf"))
         plt.close()
 
         if paramnames_w:
@@ -349,7 +365,9 @@ class FRBAnalysis:
             print("Plot w...")
             chains.plot_2d(ax, color=self.model_color)
             ax.tick_params(axis="both", which="major", labelsize=12)
-            fig.savefig(f"results/{self.file_root}_w_posterior.pdf")
+            fig.savefig(
+                os.path.join(self.results_dir, f"{self.file_root}_w_posterior.pdf")
+            )
             plt.close()
 
         if self.is_periodic_model:
@@ -402,8 +420,11 @@ class FRBAnalysis:
             ax.tick_params(axis="both", which="major", labelsize=12)
             ax.legend(fontsize=12)
             plt.tight_layout()
-            os.makedirs("results", exist_ok=True)
-            plt.savefig(f"results/{self.file_root}_period_distribution.pdf")
+            plt.savefig(
+                os.path.join(
+                    self.results_dir, f"{self.file_root}_period_distribution.pdf"
+                )
+            )
             plt.close()
 
             print("Plotting T...")
@@ -411,7 +432,10 @@ class FRBAnalysis:
             print("Model is not periodic; period distribution plot not generated.")
 
     def overlay_predictions_on_input(self):
-        chains = read_chains("chains/" + self.file_root, columns=self.paramnames_all)
+        chains = read_chains(
+            os.path.join(global_settings.get("base_dir"), self.file_root),
+            columns=self.paramnames_all,
+        )
 
         fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -460,8 +484,11 @@ class FRBAnalysis:
         ax.grid(True)
         plt.tight_layout()
 
-        os.makedirs("results", exist_ok=True)
-        plt.savefig(f"results/{self.file_root}_overlay_predictions_on_snr.pdf")
+        plt.savefig(
+            os.path.join(
+                self.results_dir, f"{self.file_root}_overlay_predictions_on_snr.pdf"
+            )
+        )
         plt.close()
 
         print("Plotting done!")

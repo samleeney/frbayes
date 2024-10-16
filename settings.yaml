@@ -3,7 +3,10 @@ original_freq_res: 24414.0625  # Hz
 original_time_res: 0.98304e-3  # s
 desired_freq_res: 3.125e6  # Hz
 desired_time_res: 7.86432e-3  # s
-max_peaks: 15
-file_root: "periodic_exponential"
+freq_min: 400
+freq_max: 800
+max_peaks: 12
+file_root: "periodic_emg"
 fit_pulses: False
-model: "periodic_exponential"
+model: "periodic_emg"
+base_dir: "chains"

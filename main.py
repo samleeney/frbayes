@@ -2,6 +2,7 @@ import os
 from frbayes import data, analysis, sample
 from frbayes.settings import global_settings
 from frbayes.sample import FRBModel
+import sys
 
 
 def main():
@@ -12,7 +13,7 @@ def main():
     configurations, preprocesses the data, initializes the analysis and model instances,
     runs the PolyChord sampler, and processes and visualizes the results.
     """
-    # Handle SLURM job ID or default to 2
+    # Handle SLURM job ID or default to 4
     slurm_job_id = (
         4
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
@@ -29,6 +30,14 @@ def main():
         global_settings.set("model", model_from_env)
     model_ = global_settings.get("model")
     print("The model is " + model_)
+
+    # Optionally set base_dir from environment variable
+    base_dir_from_env = os.environ.get("FRB_BASE_DIR")
+    if base_dir_from_env is not None:
+        global_settings.set("base_dir", base_dir_from_env)
+    base_dir_ = global_settings.get("base_dir")
+    print("The base directory is " + base_dir_)
+
     # Update settings with the maximum number of peaks and file root
     global_settings.set("max_peaks", int(slurm_job_id))
     global_settings.set(
@@ -51,6 +60,9 @@ def main():
     frb_analysis.process_chains()
     frb_analysis.functional_posteriors()
     frb_analysis.overlay_predictions_on_input()
+
+    # Exit code for slurm
+    sys.exit(0)
 
 
 if __name__ == "__main__":
