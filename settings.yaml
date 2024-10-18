@@ -6,7 +6,7 @@ desired_time_res: 7.86432e-3  # s
 freq_min: 400
 freq_max: 800
 max_peaks: 12
-file_root: "periodic_emg"
+file_root: "periodic_exp_plus_exp"
 fit_pulses: False
-model: "periodic_emg"
+model: "periodic_exp_plus_exp"
 base_dir: "chains"

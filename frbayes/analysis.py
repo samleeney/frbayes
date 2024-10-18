@@ -21,6 +21,8 @@ MODEL_COLOR_MAPS = {
     "exponential": plt.cm.Greens_r,
     "periodic_exponential": plt.cm.Reds_r,
     "periodic_emg": plt.cm.Oranges_r,
+    "double_periodic_exp": plt.cm.Purples_r,
+    "periodic_exp_plus_exp": plt.cm.YlOrBr_r,
 }
 
 MODEL_COLORS = {
@@ -28,6 +30,8 @@ MODEL_COLORS = {
     "exponential": "green",
     "periodic_exponential": "red",
     "periodic_emg": "orange",
+    "double_periodic_exp": "magenta",
+    "periodic_exp_plus_exp": "brown",
 }
 
 
@@ -51,6 +55,8 @@ class FRBAnalysis:
         self.is_periodic_model = self.model_name in [
             "periodic_exponential",
             "periodic_emg",
+            "double_periodic_exp",
+            "periodic_exp_plus_exp",
         ]
 
         if self.model_name in MODEL_COLOR_MAPS:
@@ -157,29 +163,34 @@ class FRBAnalysis:
         colors = plt.cm.viridis(np.linspace(0, 1, self.max_peaks))
 
         if self.is_periodic_model:
-            period_param_index = self.model.dim * self.max_peaks + 1
-            u0_param_index = self.model.dim * self.max_peaks
-            period_chain = chains.iloc[:, period_param_index]
-            u0_chain = chains.iloc[:, u0_param_index]
-            u_mean = u0_chain.mean()
-            period_mean = period_chain.mean()
-            period_std = period_chain.std()
+            if hasattr(self.model, "get_period_param_indices"):
+                period_indices = self.model.get_period_param_indices()
+            else:
+                period_indices = [self.model.get_period_param_index()]
+            u0_indices = self.model.get_u0_param_indices()
 
-            # Plot u_0 + nT lines and spans
-            for i in range(self.max_peaks):
-                u_n = u0_chain + i * period_chain
-                mean = u_n.mean()
-                std = u_n.std()
-                color = colors[i]
+            for idx, (u0_idx, period_idx) in enumerate(zip(u0_indices, period_indices)):
+                period_chain = chains.iloc[:, period_idx]
+                u0_chain = chains.iloc[:, u0_idx]
+                u_mean = u0_chain.mean()
+                period_mean = period_chain.mean()
+                period_std = period_chain.std()
 
-                ax1.axvline(mean, color=color, linestyle="-", linewidth=2)
-                ax1.axvspan(
-                    mean - std * 0.5,
-                    mean + std * 0.5,
-                    color=color,
-                    alpha=0.3,
-                )
-                print(f"u_{i}: Mean = {mean}, Std Dev = {std}")
+                # Plot u_0 + nT lines and spans
+                for i in range(self.max_peaks):
+                    u_n = u0_chain + i * period_chain
+                    mean = u_n.mean()
+                    std = u_n.std()
+                    color = colors[i]
+
+                    ax1.axvline(mean, color=color, linestyle="-", linewidth=2)
+                    ax1.axvspan(
+                        mean - std * 0.5,
+                        mean + std * 0.5,
+                        color=color,
+                        alpha=0.3,
+                    )
+                    print(f"Model {idx+1}, u_{i}: Mean = {mean}, Std Dev = {std}")
         else:
             for i in range(self.max_peaks):
                 mean = chains.loc[
@@ -263,23 +274,21 @@ class FRBAnalysis:
             paramnames_A = self.paramnames_all[: self.max_peaks]
             paramnames_tau = self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
 
-            paramnames_u0 = [self.paramnames_all[2 * self.max_peaks]]
-            paramnames_T = [self.paramnames_all[2 * self.max_peaks + 1]]
-            paramnames_sigma = [self.paramnames_all[2 * self.max_peaks + 2]]
+            u0_indices = self.model.get_u0_param_indices()
+            T_indices = self.model.get_period_param_indices()
+            sigma_index = self.model.get_sigma_param_index()
+
+            paramnames_u0 = [self.paramnames_all[idx] for idx in u0_indices]
+            paramnames_T = [self.paramnames_all[idx] for idx in T_indices]
+            paramnames_sigma = [self.paramnames_all[sigma_index]]
 
             if self.fit_pulses:
-                paramnames_Npulse = [self.paramnames_all[2 * self.max_peaks + 3]]
+                paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
 
-            if isinstance(self.model, type(get_model("periodic_emg", global_settings))):
+            if hasattr(self.model, "has_w") and self.model.has_w:
                 paramnames_w = self.paramnames_all[
                     2 * self.max_peaks : 3 * self.max_peaks
                 ]
-                paramnames_u0 = [self.paramnames_all[3 * self.max_peaks]]
-                paramnames_T = [self.paramnames_all[3 * self.max_peaks + 1]]
-                paramnames_sigma = [self.paramnames_all[3 * self.max_peaks + 2]]
-
-                if self.fit_pulses:
-                    paramnames_Npulse = [self.paramnames_all[3 * self.max_peaks + 3]]
 
             # Construct parameter groups
             paramnames_subset = (
@@ -292,9 +301,12 @@ class FRBAnalysis:
             )
             paramnames_amp = paramnames_A + paramnames_sigma + paramnames_Npulse
             paramnames_tau = paramnames_tau + paramnames_sigma + paramnames_Npulse
-            paramnames_u = (
-                paramnames_u0 + paramnames_T + paramnames_sigma + paramnames_Npulse
-            )
+            if paramnames_u0:
+                paramnames_u = (
+                    paramnames_u0 + paramnames_T + paramnames_sigma + paramnames_Npulse
+                )
+            else:
+                paramnames_u = paramnames_sigma + paramnames_Npulse
             if paramnames_w:
                 paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
         else:
@@ -307,7 +319,7 @@ class FRBAnalysis:
             if self.fit_pulses:
                 paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
 
-            if isinstance(self.model, type(get_model("emg", global_settings))):
+            if hasattr(self.model, "has_w") and self.model.has_w:
                 paramnames_w = self.paramnames_all[
                     3 * self.max_peaks : 4 * self.max_peaks
                 ]
@@ -375,59 +387,58 @@ class FRBAnalysis:
 
     def plot_period_distribution(self, chains):
         if self.is_periodic_model:
-            if self.model_name == "periodic_exponential":
-                period_param_index = 2 * self.max_peaks + 1
-            elif self.model_name == "periodic_emg":
-                period_param_index = 3 * self.max_peaks + 1
-            else:
-                raise ValueError("Invalid model name for periodic model.")
+            period_indices = self.model.get_period_param_indices()
+            for idx, period_param_index in enumerate(period_indices):
+                period_param_name = self.paramnames_all[period_param_index]
+                period_chain = chains[period_param_name]
 
-            period_param_name = self.paramnames_all[period_param_index]
-            period_chain = chains[period_param_name]
+                mean_period = period_chain.mean()
+                std_period = period_chain.std()
 
-            mean_period = period_chain.mean()
-            std_period = period_chain.std()
-
-            # Plot using anesthetic
-            fig, ax = plt.subplots(figsize=(10, 6))
-            hist_plot_1d(
-                ax, period_chain, weights=chains.get_weights(), color=self.model_color
-            )
-            ax.axvline(
-                mean_period,
-                color="green",
-                linestyle="--",
-                linewidth=2,
-                label=f"Mean: {mean_period:.2f} s",
-            )
-            ax.axvline(
-                mean_period - std_period,
-                color="lightgreen",
-                linestyle=":",
-                linewidth=2,
-                label=rf"-1$\sigma$: {mean_period - std_period:.2f} s",
-            )
-            ax.axvline(
-                mean_period + std_period,
-                color="lightgreen",
-                linestyle=":",
-                linewidth=2,
-                label=rf"+1$\sigma$: {mean_period + std_period:.2f} s",
-            )
-
-            ax.set_xlabel("Period (T) (s)", fontsize=14)
-            ax.set_ylabel("Probability Density", fontsize=14)
-            ax.tick_params(axis="both", which="major", labelsize=12)
-            ax.legend(fontsize=12)
-            plt.tight_layout()
-            plt.savefig(
-                os.path.join(
-                    self.results_dir, f"{self.file_root}_period_distribution.pdf"
+                # Plot using anesthetic
+                fig, ax = plt.subplots(figsize=(10, 6))
+                hist_plot_1d(
+                    ax,
+                    period_chain,
+                    weights=chains.get_weights(),
+                    color=self.model_color,
                 )
-            )
-            plt.close()
+                ax.axvline(
+                    mean_period,
+                    color="green",
+                    linestyle="--",
+                    linewidth=2,
+                    label=f"Mean: {mean_period:.2f} s",
+                )
+                ax.axvline(
+                    mean_period - std_period,
+                    color="lightgreen",
+                    linestyle=":",
+                    linewidth=2,
+                    label=rf"-1$\sigma$: {mean_period - std_period:.2f} s",
+                )
+                ax.axvline(
+                    mean_period + std_period,
+                    color="lightgreen",
+                    linestyle=":",
+                    linewidth=2,
+                    label=rf"+1$\sigma$: {mean_period + std_period:.2f} s",
+                )
 
-            print("Plotting T...")
+                ax.set_xlabel(f"Period (T{idx+1}) (s)", fontsize=14)
+                ax.set_ylabel("Probability Density", fontsize=14)
+                ax.tick_params(axis="both", which="major", labelsize=12)
+                ax.legend(fontsize=12)
+                plt.tight_layout()
+                plt.savefig(
+                    os.path.join(
+                        self.results_dir,
+                        f"{self.file_root}_period_distribution_{idx+1}.pdf",
+                    )
+                )
+                plt.close()
+
+                print(f"Plotting T{idx+1}...")
         else:
             print("Model is not periodic; period distribution plot not generated.")
 

@@ -15,7 +15,7 @@ def main():
     """
     # Handle SLURM job ID or default to 4
     slurm_job_id = (
-        4
+        1
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
