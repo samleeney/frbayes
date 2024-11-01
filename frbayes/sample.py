@@ -71,6 +71,7 @@ class FRBModel:
             self.loglikelihood,
             self.nDims,
             nDerived=nDerived,
+            # num_repeats=self.nDims * 10,
             base_dir=global_settings.get("base_dir"),
             prior=self.prior,
             file_root=global_settings.get("file_root"),

@@ -32,7 +32,7 @@ def main():
     print("The model is " + model_)
 
     # Optionally set base_dir from environment variable
-    base_dir_from_env = os.environ.get("FRB_BASE_DIR")
+    base_dir_from_env = "chains_" + os.environ.get("SLURM_JOB_NAME")
     if base_dir_from_env is not None:
         global_settings.set("base_dir", base_dir_from_env)
     base_dir_ = global_settings.get("base_dir")
@@ -61,8 +61,7 @@ def main():
     frb_analysis.functional_posteriors()
     frb_analysis.overlay_predictions_on_input()
 
-    # Exit code for slurm
-    sys.exit(0)
+    print("Finished running FRB analysis pipeline.")
 
 
 if __name__ == "__main__":

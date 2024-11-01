@@ -6,3 +6,4 @@ SciencePlots
 anesthetic
 mpi4py
 fgivenx
+seaborn
