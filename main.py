@@ -32,8 +32,8 @@ def main():
     print("The model is " + model_)
 
     # Optionally set base_dir from environment variable
-    base_dir_from_env = "chains_" + os.environ.get("SLURM_JOB_NAME")
-    if base_dir_from_env is not None:
+    if os.environ.get("SLURM_JOB_NAME") is not None:
+        base_dir_from_env = "chains_" + os.environ.get("SLURM_JOB_NAME")
         global_settings.set("base_dir", base_dir_from_env)
     base_dir_ = global_settings.get("base_dir")
     print("The base directory is " + base_dir_)
