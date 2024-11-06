@@ -5,8 +5,8 @@ desired_freq_res: 3.125e6  # Hz
 desired_time_res: 7.86432e-3  # s
 freq_min: 400
 freq_max: 800
-max_peaks: 12
-file_root: "periodic_exp_plus_exp"
-fit_pulses: False
-model: "periodic_exp_plus_exp"
-base_dir: "chains"
+max_peaks: 14
+file_root: "exponential_test"
+fit_pulses: True  # Set to True to fit the number of pulses
+model: "exponential"
+base_dir: "chains_exp"

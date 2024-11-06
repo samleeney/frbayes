@@ -283,7 +283,8 @@ class FRBAnalysis:
             paramnames_sigma = [self.paramnames_all[sigma_index]]
 
             if self.fit_pulses:
-                paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
+                Npulse_index = self.model.get_Npulse_param_index()
+                paramnames_Npulse = [self.paramnames_all[Npulse_index]]
 
             if hasattr(self.model, "has_w") and self.model.has_w:
                 paramnames_w = self.paramnames_all[
@@ -314,10 +315,12 @@ class FRBAnalysis:
             paramnames_A = self.paramnames_all[: self.max_peaks]
             paramnames_tau = self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
             paramnames_u = self.paramnames_all[2 * self.max_peaks : 3 * self.max_peaks]
-            paramnames_sigma = [self.paramnames_all[self.model.dim * self.max_peaks]]
+            sigma_index = self.model.get_sigma_param_index()
+            paramnames_sigma = [self.paramnames_all[sigma_index]]
 
             if self.fit_pulses:
-                paramnames_Npulse = [self.paramnames_all[self.model.nDims - 1]]
+                Npulse_index = self.model.get_Npulse_param_index()
+                paramnames_Npulse = [self.paramnames_all[Npulse_index]]
 
             if hasattr(self.model, "has_w") and self.model.has_w:
                 paramnames_w = self.paramnames_all[

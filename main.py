@@ -13,15 +13,17 @@ def main():
     configurations, preprocesses the data, initializes the analysis and model instances,
     runs the PolyChord sampler, and processes and visualizes the results.
     """
+
+    # Load global settings
+    global_settings.load_settings()
+
     # Handle SLURM job ID or default to 4
     slurm_job_id = (
-        1
+        global_settings.get("max_peaks")
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
 
-    # Load global settings
-    global_settings.load_settings()
     fit_pulses_ = global_settings.get("fit_pulses")
 
     # Set the model based on environment variable or default
