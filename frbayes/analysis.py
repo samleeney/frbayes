@@ -124,121 +124,106 @@ class FRBAnalysis:
 
     def functional_posteriors(self):
         def model_function_wrapper(t, theta):
-            if self.fit_pulses:
-                Npulse_index = self.model.nDims - 1
-                Npulse = int(theta[Npulse_index])
+            # Check if the model is one of the combined models
+            if self.model_name in ["double_periodic_exp", "periodic_exp_plus_exp"]:
+                pp_, f1, f2 = self.model.model_function(t, theta)
+                return pp_
             else:
-                Npulse = self.max_peaks
-
-            s = np.zeros((self.max_peaks, len(t)))
-
-            for i in range(self.max_peaks):
-                if i < Npulse:
-                    s[i] = self.model.model_function(t, theta, i)
+                if self.fit_pulses:
+                    Npulse_index = self.model.nDims - 1
+                    Npulse = int(theta[Npulse_index])
                 else:
-                    s[i] = 0 * np.ones(len(t))
+                    Npulse = self.max_peaks
 
-            return np.sum(s, axis=0)
+                s = np.zeros((self.max_peaks, len(t)))
 
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True, sharey=True)
+                for i in range(self.max_peaks):
+                    if i < Npulse:
+                        s[i] = self.model.model_function(t, theta, i)
+                    else:
+                        s[i] = 0 * np.ones(len(t))
+
+                return np.sum(s, axis=0)
 
         chains = read_chains(
             os.path.join(global_settings.get("base_dir"), self.file_root),
             columns=self.paramnames_all,
         )
 
-        print("Plotting contours...")
+        fig, axes = plt.subplots(
+            3,
+            1,
+            figsize=(10, 15),
+            sharex=True,
+            gridspec_kw={"height_ratios": [1, 1, 1]},
+        )
+
+        print("Plotting combined contours...")
+        # Combined model posterior
         plot_contours(
             model_function_wrapper,
             self.time_axis,
             chains,
-            ax1,
+            axes[0],
             weights=chains.get_weights(),
             colors=self.model_color_map,
         )
-        ax1.set_ylabel("SNR", fontsize=14)
-        ax1.tick_params(axis="both", which="major", labelsize=12)
+        axes[0].set_ylabel("SNR", fontsize=14)
+        axes[0].tick_params(axis="both", which="major", labelsize=12)
+        axes[0].set_title("Combined Model", fontsize=16)
         print("Done!")
 
-        colors = plt.cm.viridis(np.linspace(0, 1, self.max_peaks))
+        if self.model_name in ["double_periodic_exp", "periodic_exp_plus_exp"]:
+            # Define wrappers for individual components
+            def model_function_wrapper_f1(t, theta):
+                _, f1, _ = self.model.model_function(t, theta)
+                return f1
 
-        if self.is_periodic_model:
-            if hasattr(self.model, "get_period_param_indices"):
-                period_indices = self.model.get_period_param_indices()
-            else:
-                period_indices = [self.model.get_period_param_index()]
-            u0_indices = self.model.get_u0_param_indices()
+            def model_function_wrapper_f2(t, theta):
+                _, _, f2 = self.model.model_function(t, theta)
+                return f2
 
-            for idx, (u0_idx, period_idx) in enumerate(zip(u0_indices, period_indices)):
-                period_chain = chains.iloc[:, period_idx]
-                u0_chain = chains.iloc[:, u0_idx]
-                u_mean = u0_chain.mean()
-                period_mean = period_chain.mean()
-                period_std = period_chain.std()
+            print("Plotting individual model contours...")
+            # First component
+            plot_contours(
+                model_function_wrapper_f1,
+                self.time_axis,
+                chains,
+                axes[1],
+                weights=chains.get_weights(),
+                colors=self.model_color_map,
+            )
+            axes[1].set_ylabel("SNR", fontsize=14)
+            axes[1].tick_params(axis="both", which="major", labelsize=12)
+            axes[1].set_title("First Constituent Model", fontsize=16)
 
-                # Plot u_0 + nT lines and spans
-                for i in range(self.max_peaks):
-                    u_n = u0_chain + i * period_chain
-                    mean = u_n.mean()
-                    std = u_n.std()
-                    color = colors[i]
-
-                    ax1.axvline(mean, color=color, linestyle="-", linewidth=2)
-                    ax1.axvspan(
-                        mean - std * 0.5,
-                        mean + std * 0.5,
-                        color=color,
-                        alpha=0.3,
-                    )
-                    print(f"Model {idx+1}, u_{i}: Mean = {mean}, Std Dev = {std}")
+            # Second component
+            plot_contours(
+                model_function_wrapper_f2,
+                self.time_axis,
+                chains,
+                axes[2],
+                weights=chains.get_weights(),
+                colors=self.model_color_map,
+            )
+            axes[2].set_xlabel("Time (s)", fontsize=14)
+            axes[2].set_ylabel("SNR", fontsize=14)
+            axes[2].tick_params(axis="both", which="major", labelsize=12)
+            axes[2].set_title("Second Constituent Model", fontsize=16)
+            print("Done!")
         else:
-            for i in range(self.max_peaks):
-                mean = chains.loc[
-                    :, [self.paramnames_all[2 * self.max_peaks + i]]
-                ].mean()
-                std = chains.loc[:, [self.paramnames_all[2 * self.max_peaks + i]]].std()
-                color = colors[i]
-
-                mean_value = float(mean.iloc[0])
-                std_value = float(std.iloc[0])
-
-                ax1.axvline(mean_value, color=color, linestyle="-", linewidth=2)
-                ax1.axvspan(
-                    mean_value - std_value * 0.5,
-                    mean_value + std_value * 0.5,
-                    color=color,
-                    alpha=0.3,
-                )
-
-                print(f"Peak {i}: Mean = {mean_value}, Std Dev = {std_value}")
-
-        mean_handle = Line2D(
-            [0],
-            [0],
-            color="black",
-            linestyle="-",
-            linewidth=2,
-            label=r"$\textsc{mean} \, \mu$",
-        )
-        std_handle = Patch(
-            facecolor="black", edgecolor="black", alpha=0.3, label=r"$1\sigma_\mu$"
-        )
-
-        ax1.legend(handles=[mean_handle, std_handle], loc="upper right")
-
-        print("Plotting lines...")
-        plot_lines(
-            model_function_wrapper,
-            self.time_axis,
-            chains,
-            ax2,
-            weights=chains.get_weights(),
-            color=self.model_color,
-        )
-        ax2.set_xlabel("Time (s)", fontsize=14)
-        ax2.set_ylabel("SNR", fontsize=14)
-        ax2.tick_params(axis="both", which="major", labelsize=12)
-        print("Done!")
+            # Plot lines for non-combined models
+            plot_lines(
+                model_function_wrapper,
+                self.time_axis,
+                chains,
+                axes[1],
+                weights=chains.get_weights(),
+                color=self.model_color,
+            )
+            axes[1].set_xlabel("Time (s)", fontsize=14)
+            axes[1].set_ylabel("SNR", fontsize=14)
+            axes[1].tick_params(axis="both", which="major", labelsize=12)
 
         fig.tight_layout()
         plt.savefig(
@@ -269,47 +254,133 @@ class FRBAnalysis:
 
         # Assign parameter names based on the model
         if self.is_periodic_model:
-            # For periodic models
-            dim = self.model.dim
-            paramnames_A = self.paramnames_all[: self.max_peaks]
-            paramnames_tau = self.paramnames_all[self.max_peaks : 2 * self.max_peaks]
+            # Handle combined models separately
+            if self.model_name in ["double_periodic_exp", "periodic_exp_plus_exp"]:
+                # Collect parameters for plotting
+                paramnames_sigma = [r"$\sigma$"]
 
-            u0_indices = self.model.get_u0_param_indices()
-            T_indices = self.model.get_period_param_indices()
-            sigma_index = self.model.get_sigma_param_index()
+                if self.model_name == "double_periodic_exp":
+                    # First constituent model
+                    n1 = self.model.n1
+                    n2 = self.model.n2
 
-            paramnames_u0 = [self.paramnames_all[idx] for idx in u0_indices]
-            paramnames_T = [self.paramnames_all[idx] for idx in T_indices]
-            paramnames_sigma = [self.paramnames_all[sigma_index]]
+                    paramnames_A += self.paramnames_all[:n1]
+                    paramnames_tau += self.paramnames_all[n1 : 2 * n1]
+                    paramnames_u0.append(self.paramnames_all[2 * n1])
+                    paramnames_T.append(self.paramnames_all[2 * n1 + 1])
 
-            if self.fit_pulses:
-                Npulse_index = self.model.get_Npulse_param_index()
-                paramnames_Npulse = [self.paramnames_all[Npulse_index]]
+                    # Second constituent model
+                    start_idx = 2 * n1 + 2
+                    paramnames_A += self.paramnames_all[start_idx : start_idx + n2]
+                    paramnames_tau += self.paramnames_all[
+                        start_idx + n2 : start_idx + 2 * n2
+                    ]
+                    paramnames_u0.append(self.paramnames_all[start_idx + 2 * n2])
+                    paramnames_T.append(self.paramnames_all[start_idx + 2 * n2 + 1])
 
-            if hasattr(self.model, "has_w") and self.model.has_w:
-                paramnames_w = self.paramnames_all[
-                    2 * self.max_peaks : 3 * self.max_peaks
-                ]
+                    sigma_index = self.model.get_sigma_param_index()
+                    paramnames_sigma = [self.paramnames_all[sigma_index]]
 
-            # Construct parameter groups
-            paramnames_subset = (
-                paramnames_A[:ptd]
-                + paramnames_tau[:ptd]
-                + paramnames_u0
-                + paramnames_T
-                + paramnames_sigma
-                + paramnames_Npulse
-            )
-            paramnames_amp = paramnames_A + paramnames_sigma + paramnames_Npulse
-            paramnames_tau = paramnames_tau + paramnames_sigma + paramnames_Npulse
-            if paramnames_u0:
+                    if self.fit_pulses:
+                        Npulse_indices = self.model.get_Npulse_param_index()
+                        paramnames_Npulse = [
+                            self.paramnames_all[idx] for idx in Npulse_indices
+                        ]
+
+                elif self.model_name == "periodic_exp_plus_exp":
+                    # Periodic constituent
+                    n1 = self.model.n1
+                    n2 = self.model.n2
+
+                    paramnames_A += self.paramnames_all[:n1]
+                    paramnames_tau += self.paramnames_all[n1 : 2 * n1]
+                    paramnames_u0.append(self.paramnames_all[2 * n1])
+                    paramnames_T.append(self.paramnames_all[2 * n1 + 1])
+
+                    # Exponential constituent
+                    start_exp_idx = 2 * n1 + 2
+                    paramnames_A += self.paramnames_all[
+                        start_exp_idx : start_exp_idx + n2
+                    ]
+                    paramnames_tau += self.paramnames_all[
+                        start_exp_idx + n2 : start_exp_idx + 2 * n2
+                    ]
+                    paramnames_u += self.paramnames_all[
+                        start_exp_idx + 2 * n2 : start_exp_idx + 3 * n2
+                    ]
+
+                    sigma_index = self.model.get_sigma_param_index()
+                    paramnames_sigma = [self.paramnames_all[sigma_index]]
+
+                    if self.fit_pulses:
+                        Npulse_indices = self.model.get_Npulse_param_index()
+                        paramnames_Npulse = [
+                            self.paramnames_all[idx] for idx in Npulse_indices
+                        ]
+                else:
+                    pass  # Other models
+
+                # Construct parameter groups
+                paramnames_subset = (
+                    paramnames_A[:ptd]
+                    + paramnames_tau[:ptd]
+                    + paramnames_u0
+                    + paramnames_T
+                    + paramnames_sigma
+                    + paramnames_Npulse
+                )
+                paramnames_amp = paramnames_A + paramnames_sigma + paramnames_Npulse
+                paramnames_tau = paramnames_tau + paramnames_sigma + paramnames_Npulse
                 paramnames_u = (
                     paramnames_u0 + paramnames_T + paramnames_sigma + paramnames_Npulse
                 )
             else:
-                paramnames_u = paramnames_sigma + paramnames_Npulse
-            if paramnames_w:
-                paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
+                # For other periodic models
+                dim = self.model.dim
+                paramnames_A = self.paramnames_all[: self.max_peaks]
+                paramnames_tau = self.paramnames_all[
+                    self.max_peaks : 2 * self.max_peaks
+                ]
+
+                u0_indices = self.model.get_u0_param_indices()
+                T_indices = self.model.get_period_param_indices()
+                sigma_index = self.model.get_sigma_param_index()
+
+                paramnames_u0 = [self.paramnames_all[idx] for idx in u0_indices]
+                paramnames_T = [self.paramnames_all[idx] for idx in T_indices]
+                paramnames_sigma = [self.paramnames_all[sigma_index]]
+
+                if self.fit_pulses:
+                    Npulse_index = self.model.get_Npulse_param_index()
+                    paramnames_Npulse = [self.paramnames_all[Npulse_index]]
+
+                if hasattr(self.model, "has_w") and self.model.has_w:
+                    paramnames_w = self.paramnames_all[
+                        2 * self.max_peaks : 3 * self.max_peaks
+                    ]
+
+                # Construct parameter groups
+                paramnames_subset = (
+                    paramnames_A[:ptd]
+                    + paramnames_tau[:ptd]
+                    + paramnames_u0
+                    + paramnames_T
+                    + paramnames_sigma
+                    + paramnames_Npulse
+                )
+                paramnames_amp = paramnames_A + paramnames_sigma + paramnames_Npulse
+                paramnames_tau = paramnames_tau + paramnames_sigma + paramnames_Npulse
+                if paramnames_u0:
+                    paramnames_u = (
+                        paramnames_u0
+                        + paramnames_T
+                        + paramnames_sigma
+                        + paramnames_Npulse
+                    )
+                else:
+                    paramnames_u = paramnames_sigma + paramnames_Npulse
+                if paramnames_w:
+                    paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
         else:
             # For non-periodic models
             paramnames_A = self.paramnames_all[: self.max_peaks]
@@ -341,6 +412,7 @@ class FRBAnalysis:
             if paramnames_w:
                 paramnames_w = paramnames_w + paramnames_sigma + paramnames_Npulse
 
+        # Create corner plots
         fig, ax = make_2d_axes(paramnames_subset, figsize=(6, 6))
         print("Plot subset...")
         chains.plot_2d(ax, color=self.model_color)
@@ -368,12 +440,15 @@ class FRBAnalysis:
         )
         plt.close()
 
-        fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
-        print("Plot u...")
-        chains.plot_2d(ax, color=self.model_color)
-        ax.tick_params(axis="both", which="major", labelsize=12)
-        fig.savefig(os.path.join(self.results_dir, f"{self.file_root}_u_posterior.pdf"))
-        plt.close()
+        if paramnames_u:
+            fig, ax = make_2d_axes(paramnames_u, figsize=(6, 6))
+            print("Plot u...")
+            chains.plot_2d(ax, color=self.model_color)
+            ax.tick_params(axis="both", which="major", labelsize=12)
+            fig.savefig(
+                os.path.join(self.results_dir, f"{self.file_root}_u_posterior.pdf")
+            )
+            plt.close()
 
         if paramnames_w:
             fig, ax = make_2d_axes(paramnames_w, figsize=(6, 6))
@@ -451,9 +526,15 @@ class FRBAnalysis:
             columns=self.paramnames_all,
         )
 
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, axes = plt.subplots(
+            3,
+            1,
+            figsize=(12, 12),
+            sharex=True,
+            gridspec_kw={"height_ratios": [1, 1, 1]},
+        )
 
-        ax.plot(
+        axes[0].plot(
             self.time_axis,
             self.pulse_profile_snr,
             label="Pulse Profile SNR",
@@ -463,41 +544,110 @@ class FRBAnalysis:
         )
 
         def model_function_wrapper(t, theta):
-            if self.fit_pulses:
-                Npulse_index = self.model.nDims - 1
-                Npulse = int(theta[Npulse_index])
+            # Check if the model is one of the combined models
+            if self.model_name in ["double_periodic_exp", "periodic_exp_plus_exp"]:
+                pp_, f1, f2 = self.model.model_function(t, theta)
+                return pp_
             else:
-                Npulse = self.max_peaks
-
-            s = np.zeros((self.max_peaks, len(t)))
-
-            for i in range(self.max_peaks):
-                if i < Npulse:
-                    s[i] = self.model.model_function(t, theta, i)
+                if self.fit_pulses:
+                    Npulse_index = self.model.nDims - 1
+                    Npulse = int(theta[Npulse_index])
                 else:
-                    s[i] = 0 * np.ones(len(t))
+                    Npulse = self.max_peaks
 
-            return np.sum(s, axis=0)
+                s = np.zeros((self.max_peaks, len(t)))
 
-        print("Overlaying predictions on pulse profile SNR...")
+                for i in range(self.max_peaks):
+                    if i < Npulse:
+                        s[i] = self.model.model_function(t, theta, i)
+                    else:
+                        s[i] = 0 * np.ones(len(t))
+
+                return np.sum(s, axis=0)
+
+        print("Overlaying combined predictions on pulse profile SNR...")
         plot_lines(
             model_function_wrapper,
             self.time_axis,
             chains,
-            ax,
+            axes[0],
             weights=chains.get_weights(),
             color=self.model_color,
             linewidth=1,
             alpha=0.7,
         )
+        axes[0].set_ylabel("Signal / Noise", fontsize=14)
+        axes[0].tick_params(axis="both", which="major", labelsize=12)
+        axes[0].legend()
+        axes[0].grid(True)
+        axes[0].set_title("Combined Model", fontsize=16)
 
-        ax.set_xlabel("Time (s)", fontsize=14)
-        ax.set_ylabel("Signal / Noise", fontsize=14)
-        ax.tick_params(axis="both", which="major", labelsize=12)
-        ax.legend()
-        ax.grid(True)
+        if self.model_name in ["double_periodic_exp", "periodic_exp_plus_exp"]:
+            # Define wrappers for individual components
+            def model_function_wrapper_f1(t, theta):
+                _, f1, _ = self.model.model_function(t, theta)
+                return f1
+
+            def model_function_wrapper_f2(t, theta):
+                _, _, f2 = self.model.model_function(t, theta)
+                return f2
+
+            print("Overlaying first constituent model predictions...")
+            axes[1].plot(
+                self.time_axis,
+                self.pulse_profile_snr,
+                label="Pulse Profile SNR",
+                color="black",
+                linewidth=1.5,
+                alpha=0.8,
+            )
+            plot_lines(
+                model_function_wrapper_f1,
+                self.time_axis,
+                chains,
+                axes[1],
+                weights=chains.get_weights(),
+                color=self.model_color,
+                linewidth=1,
+                alpha=0.7,
+            )
+            axes[1].set_ylabel("Signal / Noise", fontsize=14)
+            axes[1].tick_params(axis="both", which="major", labelsize=12)
+            axes[1].legend()
+            axes[1].grid(True)
+            axes[1].set_title("First Constituent Model", fontsize=16)
+
+            print("Overlaying second constituent model predictions...")
+            axes[2].plot(
+                self.time_axis,
+                self.pulse_profile_snr,
+                label="Pulse Profile SNR",
+                color="black",
+                linewidth=1.5,
+                alpha=0.8,
+            )
+            plot_lines(
+                model_function_wrapper_f2,
+                self.time_axis,
+                chains,
+                axes[2],
+                weights=chains.get_weights(),
+                color=self.model_color,
+                linewidth=1,
+                alpha=0.7,
+            )
+            axes[2].set_xlabel("Time (s)", fontsize=14)
+            axes[2].set_ylabel("Signal / Noise", fontsize=14)
+            axes[2].tick_params(axis="both", which="major", labelsize=12)
+            axes[2].legend()
+            axes[2].grid(True)
+            axes[2].set_title("Second Constituent Model", fontsize=16)
+        else:
+            # For other models, plot only the combined prediction
+            axes[1].set_visible(False)
+            axes[2].set_visible(False)
+
         plt.tight_layout()
-
         plt.savefig(
             os.path.join(
                 self.results_dir, f"{self.file_root}_overlay_predictions_on_snr.pdf"
