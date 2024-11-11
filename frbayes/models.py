@@ -468,20 +468,20 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
 
         # PeriodicExponentialModel parameters
         for i in range(self.n1):
-            self.paramnames_all.append(r"$A_{\text{per},{{{}}}}$".format(i + 1))
+            self.paramnames_all.append(r"$A_{\text{per},{" + str(i + 1) + r"}}$")
         for i in range(self.n1):
-            self.paramnames_all.append(r"$\tau_{\text{per},{{{}}}}$".format(i + 1))
+            self.paramnames_all.append(r"$\tau_{\text{per},{" + str(i + 1) + r"}}$")
 
         self.paramnames_all.append(r"$u_0$")
         self.paramnames_all.append(r"$T$")
 
         # ExponentialModel parameters
         for i in range(self.n2):
-            self.paramnames_all.append(r"$A_{\text{exp},{{{}}}}$".format(i + 1))
+            self.paramnames_all.append(r"$A_{\text{exp},{" + str(i + 1) + r"}}$")
         for i in range(self.n2):
-            self.paramnames_all.append(r"$\tau_{\text{exp},{{{}}}}$".format(i + 1))
+            self.paramnames_all.append(r"$\tau_{\text{exp},{" + str(i + 1) + r"}}$")
         for i in range(self.n2):
-            self.paramnames_all.append(r"$u_{\text{exp},{{{}}}}$".format(i + 1))
+            self.paramnames_all.append(r"$u_{\text{exp},{" + str(i + 1) + r"}}$")
 
         self.paramnames_all.append(r"$\sigma$")
         if self.fit_pulses:
