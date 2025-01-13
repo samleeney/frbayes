@@ -273,23 +273,40 @@ class ExponentialModel(BaseModel):
         """
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 1.0)
+        # Sample Npulse first if fitting pulses
+        if self.fit_pulses:
+            Npulse_index = 3 * self.max_peaks + 1
+            Npulse_prior = UniformPrior(1, self.max_peaks + 1)
+            theta[Npulse_index] = int(Npulse_prior(hypercube[Npulse_index]))
+            Npulse = int(theta[Npulse_index])
+        else:
+            Npulse = self.max_peaks
+
+        # Sample amplitudes
+        uniform_prior = UniformPrior(0, 1)
         theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])  # A_i
-        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
+
+        # Sample decay times
+        theta[self.max_peaks : 2 * self.max_peaks] = UniformPrior(0, 10)(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )  # tau_i
-        sorted_uniform_prior = SortedUniformPrior(0.001, 4.0)
-        theta[2 * self.max_peaks : 3 * self.max_peaks] = sorted_uniform_prior(
-            hypercube[2 * self.max_peaks : 3 * self.max_peaks]
-        )  # u_i
-        log_uniform_prior = LogUniformPrior(0.001, 1.0)
+
+        # Sample arrival times - only sort the active pulses
+        u_hypercube = hypercube[2 * self.max_peaks : 3 * self.max_peaks]
+        if Npulse > 1:
+            # Sort only the active pulses
+            active_u = SortedUniformPrior(0, 5)(u_hypercube[:Npulse])
+            inactive_u = UniformPrior(0, 5)(u_hypercube[Npulse:])
+            theta[2 * self.max_peaks : 2 * self.max_peaks + Npulse] = active_u
+            theta[2 * self.max_peaks + Npulse : 3 * self.max_peaks] = inactive_u
+        else:
+            # If only one pulse or no sorting needed, use regular uniform prior
+            theta[2 * self.max_peaks : 3 * self.max_peaks] = UniformPrior(0, 5)(u_hypercube)
+
+        # Sample sigma
+        log_uniform_prior = LogUniformPrior(0.00001, 1.0)
         sigma_index = 3 * self.max_peaks
         theta[sigma_index] = log_uniform_prior(hypercube[sigma_index])  # sigma
-
-        if self.fit_pulses:
-            Npulse_index = sigma_index + 1
-            Npulse_prior = UniformPrior(1, self.max_peaks + 1)
-            theta[Npulse_index] = Npulse_prior(hypercube[Npulse_index])
 
         return theta
 
