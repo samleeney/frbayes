@@ -119,7 +119,7 @@ class FRBAnalysis:
         axs[1].grid(True)
 
         plt.tight_layout()
-        fig.savefig(os.path.join(self.results_dir, "inputs.pdf"), bbox_inches="tight")
+        fig.savefig(os.path.join(self.results_dir, "inputs.png"), bbox_inches="tight")
         plt.close()
 
     def functional_posteriors(self):
@@ -227,7 +227,7 @@ class FRBAnalysis:
 
         fig.tight_layout()
         plt.savefig(
-            os.path.join(self.results_dir, f"{self.file_root}_f_posterior_combined.pdf")
+            os.path.join(self.results_dir, f"{self.file_root}_f_posterior_combined.png")
         )
         plt.close()
 
@@ -418,7 +418,7 @@ class FRBAnalysis:
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(
-            os.path.join(self.results_dir, f"{self.file_root}_ss_posterior.pdf")
+            os.path.join(self.results_dir, f"{self.file_root}_ss_posterior.png")
         )
         plt.close()
 
@@ -427,7 +427,7 @@ class FRBAnalysis:
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(
-            os.path.join(self.results_dir, f"{self.file_root}_amp_posterior.pdf")
+            os.path.join(self.results_dir, f"{self.file_root}_amp_posterior.png")
         )
         plt.close()
 
@@ -436,7 +436,7 @@ class FRBAnalysis:
         chains.plot_2d(ax, color=self.model_color)
         ax.tick_params(axis="both", which="major", labelsize=12)
         fig.savefig(
-            os.path.join(self.results_dir, f"{self.file_root}_tau_posterior.pdf")
+            os.path.join(self.results_dir, f"{self.file_root}_tau_posterior.png")
         )
         plt.close()
 
@@ -446,7 +446,7 @@ class FRBAnalysis:
             chains.plot_2d(ax, color=self.model_color)
             ax.tick_params(axis="both", which="major", labelsize=12)
             fig.savefig(
-                os.path.join(self.results_dir, f"{self.file_root}_u_posterior.pdf")
+                os.path.join(self.results_dir, f"{self.file_root}_u_posterior.png")
             )
             plt.close()
 
@@ -456,7 +456,7 @@ class FRBAnalysis:
             chains.plot_2d(ax, color=self.model_color)
             ax.tick_params(axis="both", which="major", labelsize=12)
             fig.savefig(
-                os.path.join(self.results_dir, f"{self.file_root}_w_posterior.pdf")
+                os.path.join(self.results_dir, f"{self.file_root}_w_posterior.png")
             )
             plt.close()
 
@@ -511,7 +511,7 @@ class FRBAnalysis:
                 plt.savefig(
                     os.path.join(
                         self.results_dir,
-                        f"{self.file_root}_period_distribution_{idx+1}.pdf",
+                        f"{self.file_root}_period_distribution_{idx+1}.png",
                     )
                 )
                 plt.close()
@@ -650,7 +650,7 @@ class FRBAnalysis:
         plt.tight_layout()
         plt.savefig(
             os.path.join(
-                self.results_dir, f"{self.file_root}_overlay_predictions_on_snr.pdf"
+                self.results_dir, f"{self.file_root}_overlay_predictions_on_snr.png"
             )
         )
         plt.close()
