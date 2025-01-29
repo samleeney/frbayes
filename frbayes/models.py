@@ -205,6 +205,7 @@ class EMGModel(BaseModel):
             Npulse = self.max_peaks
 
         pp_ = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for i in range(Npulse):
             pp_ += self.model_function(t, theta, i)
 
@@ -351,6 +352,7 @@ class ExponentialModel(BaseModel):
             Npulse = self.max_peaks
 
         pp_ = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for i in range(Npulse):
             pp_ += self.model_function(t, theta, i)
 
@@ -466,6 +468,7 @@ class PeriodicExponentialModel(BaseModel):
             Npulse = self.max_peaks
 
         pp_ = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for n in range(Npulse):
             pp_ += self.model_function(t, theta, n)
 
@@ -569,6 +572,7 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
             Npulse_exp = self.n2
 
         f_per = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for n in range(Npulse_per):
             u_n = u0 + n * T
             f = A_per[n] * np.exp(-(t - u_n) / tau_per[n])
@@ -576,6 +580,7 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
             f_per += f
 
         f_exp = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for i in range(Npulse_exp):
             f = A_exp[i] * np.exp(-(t - u_exp[i]) / tau_exp[i])
             f = np.where(t <= u_exp[i], 0.0, f)
@@ -758,6 +763,7 @@ class DoublePeriodicExponentialModel(BaseModel):
             Npulse_2 = self.n2
 
         f1 = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for n in range(Npulse_1):
             u_n = u0_1 + n * T1
             f = A1[n] * np.exp(-(t - u_n) / tau1[n])
@@ -765,6 +771,7 @@ class DoublePeriodicExponentialModel(BaseModel):
             f1 += f
 
         f2 = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
         for n in range(Npulse_2):
             u_n = u0_2 + n * T2
             f = A2[n] * np.exp(-(t - u_n) / tau2[n])
