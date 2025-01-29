@@ -7,6 +7,6 @@ freq_min: 400
 freq_max: 800
 max_peaks: 14
 file_root: "exponential_test"
-fit_pulses: True  # Set to True to fit the number of pulses
+fit_pulses: False  # Set to True to fit the number of pulses
 model: "exponential"
 base_dir: "chains_exp"
