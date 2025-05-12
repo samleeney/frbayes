@@ -137,12 +137,12 @@ class EMGModel(BaseModel):
         idx = 0  # Index tracker for hypercube
 
         # Sample amplitudes A_i
-        uniform_prior_A = UniformPrior(0, 1)
+        uniform_prior_A = UniformPrior(0.001, 1.0)
         theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
         idx += self.max_peaks
 
         # Sample decay times τ_i
-        uniform_prior_tau = UniformPrior(0, 5)
+        uniform_prior_tau = UniformPrior(0.001, 4.0)
         theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior_tau(
             hypercube[idx : idx + self.max_peaks]
         )
@@ -160,33 +160,33 @@ class EMGModel(BaseModel):
         idx += self.max_peaks
 
         # Sample sigma
-        log_uniform_prior_sigma = LogUniformPrior(0.00001, 1.0)
+        log_uniform_prior_sigma = LogUniformPrior(0.001, 1.0)
         theta[4 * self.max_peaks] = log_uniform_prior_sigma(hypercube[idx])
         idx += 1
 
         if self.fit_pulses:
             # Sample Npulse
             Npulse_prior = UniformPrior(1, self.max_peaks + 1)
-            Npulse = int(Npulse_prior(hypercube[idx]))
+            Npulse = Npulse_prior(hypercube[idx])
             idx += 1
         else:
             Npulse = self.max_peaks
 
         # Assign u_i to theta using Npulse
-        if Npulse > 0:
+        if int(Npulse) > 0:
             # Using sorted prior for active pulses
-            sorted_prior_u = SortedUniformPrior(0, 5)
-            active_u = sorted_prior_u(u_hypercube[:Npulse])
-            theta[2 * self.max_peaks : 2 * self.max_peaks + Npulse] = active_u
+            sorted_prior_u = SortedUniformPrior(0.001, 4.0)
+            active_u = sorted_prior_u(u_hypercube[:int(Npulse)])
+            theta[2 * self.max_peaks : 2 * self.max_peaks + int(Npulse)] = active_u
 
-            if Npulse < self.max_peaks:
+            if int(Npulse) < self.max_peaks:
                 # Uniform prior for inactive pulses
-                uniform_prior_u = UniformPrior(0, 5)
-                inactive_u = uniform_prior_u(u_hypercube[Npulse:])
-                theta[2 * self.max_peaks + Npulse : 3 * self.max_peaks] = inactive_u
+                uniform_prior_u = UniformPrior(0.001, 4.0)
+                inactive_u = uniform_prior_u(u_hypercube[int(Npulse):])
+                theta[2 * self.max_peaks + int(Npulse) : 3 * self.max_peaks] = inactive_u
         else:
             # If Npulse is 0 (unlikely), all u_i are uniform
-            uniform_prior_u = UniformPrior(0, 5)
+            uniform_prior_u = UniformPrior(0.001, 4.0)
             theta[2 * self.max_peaks : 3 * self.max_peaks] = uniform_prior_u(u_hypercube)
 
         if self.fit_pulses:
@@ -200,13 +200,13 @@ class EMGModel(BaseModel):
 
         sigma = theta[4 * self.max_peaks]
         if self.fit_pulses:
-            Npulse = int(theta[-1])  # Npulse is the last parameter
+            Npulse = theta[-1]  # Npulse is the last parameter
         else:
             Npulse = self.max_peaks
 
         pp_ = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for i in range(Npulse):
+        for i in range(int(Npulse)):
             pp_ += self.model_function(t, theta, i)
 
         diff = pp - pp_
@@ -291,7 +291,7 @@ class ExponentialModel(BaseModel):
         idx = 0  # Index tracker for hypercube
 
         # Sample amplitudes A_i
-        uniform_prior_A = UniformPrior(0.001, 1.0)
+        uniform_prior_A = UniformPrior(0.001, 0.1)
         theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
         idx += self.max_peaks
 
@@ -314,23 +314,23 @@ class ExponentialModel(BaseModel):
         if self.fit_pulses:
             # Sample Npulse
             Npulse_prior = UniformPrior(1, self.max_peaks + 1)
-            Npulse = int(Npulse_prior(hypercube[idx]))
+            Npulse = Npulse_prior(hypercube[idx])
             idx += 1
         else:
             Npulse = self.max_peaks
 
         # Assign u_i to theta using Npulse
-        if Npulse > 0:
+        if int(Npulse) > 0:
             # Using sorted prior for active pulses
             sorted_prior_u = SortedUniformPrior(0.001, 4.0)
-            active_u = sorted_prior_u(u_hypercube[:Npulse])
-            theta[2 * self.max_peaks : 2 * self.max_peaks + Npulse] = active_u
+            active_u = sorted_prior_u(u_hypercube[:int(Npulse)])
+            theta[2 * self.max_peaks : 2 * self.max_peaks + int(Npulse)] = active_u
 
-            if Npulse < self.max_peaks:
+            if int(Npulse) < self.max_peaks:
                 # Uniform prior for inactive pulses
                 uniform_prior_u = UniformPrior(0.001, 4.0)
-                inactive_u = uniform_prior_u(u_hypercube[Npulse:])
-                theta[2 * self.max_peaks + Npulse : 3 * self.max_peaks] = inactive_u
+                inactive_u = uniform_prior_u(u_hypercube[int(Npulse):])
+                theta[2 * self.max_peaks + int(Npulse) : 3 * self.max_peaks] = inactive_u
         else:
             # If Npulse is 0 (unlikely), all u_i are uniform
             uniform_prior_u = UniformPrior(0.001, 4.0)
@@ -347,13 +347,13 @@ class ExponentialModel(BaseModel):
 
         sigma = theta[3 * self.max_peaks]
         if self.fit_pulses:
-            Npulse = int(theta[-1])  # Npulse is the last parameter
+            Npulse = theta[-1]  # Npulse is the last parameter
         else:
             Npulse = self.max_peaks
 
         pp_ = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for i in range(Npulse):
+        for i in range(int(Npulse)):
             pp_ += self.model_function(t, theta, i)
 
         diff = pp - pp_
@@ -450,7 +450,7 @@ class PeriodicExponentialModel(BaseModel):
         if self.fit_pulses:
             Npulse_index = sigma_index + 1
             Npulse_prior = UniformPrior(1, self.max_peaks + 1)
-            theta[Npulse_index] = int(Npulse_prior(hypercube[Npulse_index]))
+            theta[Npulse_index] = Npulse_prior(hypercube[Npulse_index])
 
         return theta
 
@@ -463,13 +463,13 @@ class PeriodicExponentialModel(BaseModel):
 
         sigma = theta[2 * self.max_peaks + 2]
         if self.fit_pulses:
-            Npulse = int(theta[2 * self.max_peaks + 3])
+            Npulse = theta[2 * self.max_peaks + 3]
         else:
             Npulse = self.max_peaks
 
         pp_ = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for n in range(Npulse):
+        for n in range(int(Npulse)):
             pp_ += self.model_function(t, theta, n)
 
         diff = pp - pp_
@@ -565,15 +565,15 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
         if self.fit_pulses:
             Npulse_per_index = sigma_index + 1
             Npulse_exp_index = sigma_index + 2
-            Npulse_per = int(theta[Npulse_per_index])
-            Npulse_exp = int(theta[Npulse_exp_index])
+            Npulse_per = theta[Npulse_per_index]
+            Npulse_exp = theta[Npulse_exp_index]
         else:
             Npulse_per = self.n1
             Npulse_exp = self.n2
 
         f_per = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for n in range(Npulse_per):
+        for n in range(int(Npulse_per)):
             u_n = u0 + n * T
             f = A_per[n] * np.exp(-(t - u_n) / tau_per[n])
             f = np.where(t <= u_n, 0.0, f)
@@ -581,7 +581,7 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
 
         f_exp = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for i in range(Npulse_exp):
+        for i in range(int(Npulse_exp)):
             f = A_exp[i] * np.exp(-(t - u_exp[i]) / tau_exp[i])
             f = np.where(t <= u_exp[i], 0.0, f)
             f_exp += f
@@ -756,15 +756,15 @@ class DoublePeriodicExponentialModel(BaseModel):
         if self.fit_pulses:
             Npulse_1_index = sigma_index + 1
             Npulse_2_index = sigma_index + 2
-            Npulse_1 = int(theta[Npulse_1_index])
-            Npulse_2 = int(theta[Npulse_2_index])
+            Npulse_1 = theta[Npulse_1_index]
+            Npulse_2 = theta[Npulse_2_index]
         else:
             Npulse_1 = self.n1
             Npulse_2 = self.n2
 
         f1 = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for n in range(Npulse_1):
+        for n in range(int(Npulse_1)):
             u_n = u0_1 + n * T1
             f = A1[n] * np.exp(-(t - u_n) / tau1[n])
             f = np.where(t <= u_n, 0.0, f)
@@ -772,7 +772,7 @@ class DoublePeriodicExponentialModel(BaseModel):
 
         f2 = np.zeros(len(t))
         # Due to the size of the time array, it is not efficient to vectorize this loop
-        for n in range(Npulse_2):
+        for n in range(int(Npulse_2)):
             u_n = u0_2 + n * T2
             f = A2[n] * np.exp(-(t - u_n) / tau2[n])
             f = np.where(t <= u_n, 0.0, f)

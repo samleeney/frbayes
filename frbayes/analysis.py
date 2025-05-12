@@ -131,14 +131,14 @@ class FRBAnalysis:
             else:
                 if self.fit_pulses:
                     Npulse_index = self.model.nDims - 1
-                    Npulse = int(theta[Npulse_index])
+                    Npulse = theta[Npulse_index]
                 else:
                     Npulse = self.max_peaks
 
                 s = np.zeros((self.max_peaks, len(t)))
 
                 for i in range(self.max_peaks):
-                    if i < Npulse:
+                    if i < int(Npulse):
                         s[i] = self.model.model_function(t, theta, i)
                     else:
                         s[i] = 0 * np.ones(len(t))
@@ -551,14 +551,14 @@ class FRBAnalysis:
             else:
                 if self.fit_pulses:
                     Npulse_index = self.model.nDims - 1
-                    Npulse = int(theta[Npulse_index])
+                    Npulse = theta[Npulse_index]
                 else:
                     Npulse = self.max_peaks
 
                 s = np.zeros((self.max_peaks, len(t)))
 
                 for i in range(self.max_peaks):
-                    if i < Npulse:
+                    if i < int(Npulse):
                         s[i] = self.model.model_function(t, theta, i)
                     else:
                         s[i] = 0 * np.ones(len(t))
