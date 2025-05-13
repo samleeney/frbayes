@@ -142,8 +142,8 @@ class EMGModel(BaseModel):
         idx += self.max_peaks
 
         # Sample decay times τ_i
-        uniform_prior_tau = UniformPrior(0.001, 4.0)
-        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior_tau(
+        log_uniform_prior_tau = LogUniformPrior(0.0001, 4.0)
+        theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
             hypercube[idx : idx + self.max_peaks]
         )
         idx += self.max_peaks
@@ -296,8 +296,8 @@ class ExponentialModel(BaseModel):
         idx += self.max_peaks
 
         # Sample decay times τ_i
-        uniform_prior_tau = UniformPrior(0.001, 4.0)
-        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior_tau(
+        log_uniform_prior_tau = LogUniformPrior(0.0001, 4.0)
+        theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
             hypercube[idx : idx + self.max_peaks]
         )
         idx += self.max_peaks
@@ -427,9 +427,10 @@ class PeriodicExponentialModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
-        uniform_prior = UniformPrior(0.001, 1.0)
-        theta[: self.max_peaks] = uniform_prior(hypercube[: self.max_peaks])  # A_i
-        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior(
+        uniform_prior_A = UniformPrior(0.001, 1.0)
+        theta[: self.max_peaks] = uniform_prior_A(hypercube[: self.max_peaks])  # A_i
+        log_uniform_prior_tau = LogUniformPrior(0.0001, 1.0)
+        theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )  # tau_i
 
@@ -592,9 +593,10 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
         theta = np.zeros(self.nDims)
 
         # Periodic model parameters
-        uniform_prior = UniformPrior(0.001, 1.0)
-        theta[: self.n1] = uniform_prior(hypercube[: self.n1])  # A_per_i
-        theta[self.n1 : 2 * self.n1] = uniform_prior(
+        uniform_prior_A = UniformPrior(0.001, 1.0)
+        theta[: self.n1] = uniform_prior_A(hypercube[: self.n1])  # A_per_i
+        log_uniform_prior_tau = LogUniformPrior(0.0001, 1.0)
+        theta[self.n1 : 2 * self.n1] = log_uniform_prior_tau(
             hypercube[self.n1 : 2 * self.n1]
         )  # tau_per_i
 
@@ -608,11 +610,11 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
         start_exp_hypercube = 2 * self.n1 + 2
         start_exp_theta = 2 * self.n1 + 2
 
-        theta[start_exp_theta : start_exp_theta + self.n2] = uniform_prior(
+        theta[start_exp_theta : start_exp_theta + self.n2] = uniform_prior_A(
             hypercube[start_exp_hypercube : start_exp_hypercube + self.n2]
         )  # A_exp_i
         theta[start_exp_theta + self.n2 : start_exp_theta + 2 * self.n2] = (
-            uniform_prior(
+            log_uniform_prior_tau(
                 hypercube[
                     start_exp_hypercube
                     + self.n2 : start_exp_hypercube
@@ -784,9 +786,10 @@ class DoublePeriodicExponentialModel(BaseModel):
         theta = np.zeros(self.nDims)
 
         # First periodic model parameters
-        uniform_prior = UniformPrior(0.001, 1.0)
-        theta[: self.n1] = uniform_prior(hypercube[: self.n1])  # A1_i
-        theta[self.n1 : 2 * self.n1] = uniform_prior(
+        uniform_prior_A = UniformPrior(0.001, 1.0)
+        theta[: self.n1] = uniform_prior_A(hypercube[: self.n1])  # A1_i
+        log_uniform_prior_tau = LogUniformPrior(0.0001, 1.0)
+        theta[self.n1 : 2 * self.n1] = log_uniform_prior_tau(
             hypercube[self.n1 : 2 * self.n1]
         )  # tau1_i
 
@@ -800,11 +803,11 @@ class DoublePeriodicExponentialModel(BaseModel):
         start_second_hypercube = 2 * self.n1 + 2
         start_second_theta = 2 * self.n1 + 2
 
-        theta[start_second_theta : start_second_theta + self.n2] = uniform_prior(
+        theta[start_second_theta : start_second_theta + self.n2] = uniform_prior_A(
             hypercube[start_second_hypercube : start_second_hypercube + self.n2]
         )  # A2_i
         theta[start_second_theta + self.n2 : start_second_theta + 2 * self.n2] = (
-            uniform_prior(
+            log_uniform_prior_tau(
                 hypercube[
                     start_second_hypercube
                     + self.n2 : start_second_hypercube

@@ -5,7 +5,7 @@ desired_freq_res: 3.125e6  # Hz
 desired_time_res: 7.86432e-3  # s
 freq_min: 400
 freq_max: 800
-max_peaks: 14
+max_peaks: 1
 file_root: "exponential_test"
 fit_pulses: True  # Set to True to fit the number of pulses
 model: "exponential"
