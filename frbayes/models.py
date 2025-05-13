@@ -136,13 +136,20 @@ class EMGModel(BaseModel):
         theta = np.zeros(self.nDims)
         idx = 0  # Index tracker for hypercube
 
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("emg", "amplitude")
+        tau_range = self.settings.get_prior_range("emg", "tau")
+        u_range = self.settings.get_prior_range("emg", "u")
+        width_range = self.settings.get_prior_range("emg", "width")
+        sigma_range = self.settings.get_prior_range("emg", "sigma")
+
         # Sample amplitudes A_i
-        uniform_prior_A = UniformPrior(0.001, 1.0)
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
         theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
         idx += self.max_peaks
 
         # Sample decay times τ_i
-        log_uniform_prior_tau = LogUniformPrior(0.0001, 4.0)
+        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
         theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
             hypercube[idx : idx + self.max_peaks]
         )
@@ -153,14 +160,14 @@ class EMGModel(BaseModel):
         idx += self.max_peaks
 
         # Sample width parameters w_i
-        uniform_prior_w = UniformPrior(0.01, 1)
+        uniform_prior_w = UniformPrior(width_range["min"], width_range["max"])
         theta[3 * self.max_peaks : 4 * self.max_peaks] = uniform_prior_w(
             hypercube[idx : idx + self.max_peaks]
         )
         idx += self.max_peaks
 
         # Sample sigma
-        log_uniform_prior_sigma = LogUniformPrior(0.001, 1.0)
+        log_uniform_prior_sigma = LogUniformPrior(sigma_range["min"], sigma_range["max"])
         theta[4 * self.max_peaks] = log_uniform_prior_sigma(hypercube[idx])
         idx += 1
 
@@ -175,18 +182,18 @@ class EMGModel(BaseModel):
         # Assign u_i to theta using Npulse
         if int(Npulse) > 0:
             # Using sorted prior for active pulses
-            sorted_prior_u = SortedUniformPrior(0.001, 4.0)
+            sorted_prior_u = SortedUniformPrior(u_range["min"], u_range["max"])
             active_u = sorted_prior_u(u_hypercube[:int(Npulse)])
             theta[2 * self.max_peaks : 2 * self.max_peaks + int(Npulse)] = active_u
 
             if int(Npulse) < self.max_peaks:
                 # Uniform prior for inactive pulses
-                uniform_prior_u = UniformPrior(0.001, 4.0)
+                uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
                 inactive_u = uniform_prior_u(u_hypercube[int(Npulse):])
                 theta[2 * self.max_peaks + int(Npulse) : 3 * self.max_peaks] = inactive_u
         else:
             # If Npulse is 0 (unlikely), all u_i are uniform
-            uniform_prior_u = UniformPrior(0.001, 4.0)
+            uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
             theta[2 * self.max_peaks : 3 * self.max_peaks] = uniform_prior_u(u_hypercube)
 
         if self.fit_pulses:
@@ -290,13 +297,19 @@ class ExponentialModel(BaseModel):
         theta = np.zeros(self.nDims)
         idx = 0  # Index tracker for hypercube
 
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("exponential", "amplitude")
+        tau_range = self.settings.get_prior_range("exponential", "tau")
+        u_range = self.settings.get_prior_range("exponential", "u")
+        sigma_range = self.settings.get_prior_range("exponential", "sigma")
+
         # Sample amplitudes A_i
-        uniform_prior_A = UniformPrior(0.001, 0.1)
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
         theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
         idx += self.max_peaks
 
         # Sample decay times τ_i
-        log_uniform_prior_tau = LogUniformPrior(0.0001, 4.0)
+        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
         theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
             hypercube[idx : idx + self.max_peaks]
         )
@@ -307,7 +320,7 @@ class ExponentialModel(BaseModel):
         idx += self.max_peaks
 
         # Sample sigma
-        log_uniform_prior_sigma = LogUniformPrior(0.001, 1.0)
+        log_uniform_prior_sigma = LogUniformPrior(sigma_range["min"], sigma_range["max"])
         theta[3 * self.max_peaks] = log_uniform_prior_sigma(hypercube[idx])
         idx += 1
 
@@ -322,18 +335,18 @@ class ExponentialModel(BaseModel):
         # Assign u_i to theta using Npulse
         if int(Npulse) > 0:
             # Using sorted prior for active pulses
-            sorted_prior_u = SortedUniformPrior(0.001, 4.0)
+            sorted_prior_u = SortedUniformPrior(u_range["min"], u_range["max"])
             active_u = sorted_prior_u(u_hypercube[:int(Npulse)])
             theta[2 * self.max_peaks : 2 * self.max_peaks + int(Npulse)] = active_u
 
             if int(Npulse) < self.max_peaks:
                 # Uniform prior for inactive pulses
-                uniform_prior_u = UniformPrior(0.001, 4.0)
+                uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
                 inactive_u = uniform_prior_u(u_hypercube[int(Npulse):])
                 theta[2 * self.max_peaks + int(Npulse) : 3 * self.max_peaks] = inactive_u
         else:
             # If Npulse is 0 (unlikely), all u_i are uniform
-            uniform_prior_u = UniformPrior(0.001, 4.0)
+            uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
             theta[2 * self.max_peaks : 3 * self.max_peaks] = uniform_prior_u(u_hypercube)
 
         if self.fit_pulses:
@@ -427,24 +440,38 @@ class PeriodicExponentialModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
-        uniform_prior_A = UniformPrior(0.001, 1.0)
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("periodic_exponential", "amplitude")
+        tau_range = self.settings.get_prior_range("periodic_exponential", "tau")
+        sigma_range = self.settings.get_prior_range("periodic_exponential", "sigma")
+        
+        # Get periodic-specific ranges
+        periodic_range = self.settings.get_prior_range("periodic", "period")
+        u0_range = self.settings.get_prior_range("periodic", "u0")
+        
+        # Calculate max values for u0 and period if not specified
+        u0_max = u0_range["max"] if u0_range["max"] is not None else 4.0 / self.max_peaks
+        period_max = periodic_range["max"] if periodic_range["max"] is not None else 4.0 / self.max_peaks
+
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
         theta[: self.max_peaks] = uniform_prior_A(hypercube[: self.max_peaks])  # A_i
-        log_uniform_prior_tau = LogUniformPrior(0.0001, 1.0)
+        
+        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
         theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
             hypercube[self.max_peaks : 2 * self.max_peaks]
         )  # tau_i
 
-        uniform_prior_u0 = UniformPrior(0.001, 4.0 / self.max_peaks)
+        uniform_prior_u0 = UniformPrior(u0_range["min"], u0_max)
         theta[2 * self.max_peaks] = uniform_prior_u0(
             hypercube[2 * self.max_peaks]
         )  # u0
 
-        uniform_prior_T = UniformPrior(0.001, 4.0 / self.max_peaks)
+        uniform_prior_T = UniformPrior(periodic_range["min"], period_max)
         theta[2 * self.max_peaks + 1] = uniform_prior_T(
             hypercube[2 * self.max_peaks + 1]
         )  # T
 
-        log_uniform_prior = LogUniformPrior(0.001, 1.0)
+        log_uniform_prior = LogUniformPrior(sigma_range["min"], sigma_range["max"])
         sigma_index = 2 * self.max_peaks + 2
         theta[sigma_index] = log_uniform_prior(hypercube[sigma_index])  # sigma
 
@@ -592,18 +619,33 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("periodic_exp_plus_exp", "amplitude")
+        tau_range = self.settings.get_prior_range("periodic_exp_plus_exp", "tau")
+        u_range = self.settings.get_prior_range("periodic_exp_plus_exp", "u")
+        sigma_range = self.settings.get_prior_range("periodic_exp_plus_exp", "sigma")
+        
+        # Get periodic-specific ranges
+        periodic_range = self.settings.get_prior_range("periodic", "period")
+        u0_range = self.settings.get_prior_range("periodic", "u0")
+        
+        # Calculate max values for u0 and period if not specified
+        u0_max = u0_range["max"] if u0_range["max"] is not None else 4.0 / self.n1
+        period_max = periodic_range["max"] if periodic_range["max"] is not None else 4.0 / self.n1
+
         # Periodic model parameters
-        uniform_prior_A = UniformPrior(0.001, 1.0)
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
         theta[: self.n1] = uniform_prior_A(hypercube[: self.n1])  # A_per_i
-        log_uniform_prior_tau = LogUniformPrior(0.0001, 1.0)
+        
+        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
         theta[self.n1 : 2 * self.n1] = log_uniform_prior_tau(
             hypercube[self.n1 : 2 * self.n1]
         )  # tau_per_i
 
-        uniform_prior_u0 = UniformPrior(0.001, 4.0 / self.n1)
+        uniform_prior_u0 = UniformPrior(u0_range["min"], u0_max)
         theta[2 * self.n1] = uniform_prior_u0(hypercube[2 * self.n1])  # u0
 
-        uniform_prior_T = UniformPrior(0.001, 4.0 / self.n1)
+        uniform_prior_T = UniformPrior(periodic_range["min"], period_max)
         theta[2 * self.n1 + 1] = uniform_prior_T(hypercube[2 * self.n1 + 1])  # T
 
         # Exponential model parameters
@@ -622,7 +664,7 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
                 ]
             )
         )  # tau_exp_i
-        sorted_uniform_prior = SortedUniformPrior(0.001, 4.0)
+        sorted_uniform_prior = SortedUniformPrior(u_range["min"], u_range["max"])
         theta[start_exp_theta + 2 * self.n2 : start_exp_theta + 3 * self.n2] = (
             sorted_uniform_prior(
                 hypercube[
@@ -635,7 +677,7 @@ class PeriodicExponentialPlusExponentialModel(BaseModel):
 
         # Sigma
         sigma_index = start_exp_theta + 3 * self.n2
-        log_uniform_prior = LogUniformPrior(0.001, 1.0)
+        log_uniform_prior = LogUniformPrior(sigma_range["min"], sigma_range["max"])
         theta[sigma_index] = log_uniform_prior(hypercube[sigma_index])  # sigma
 
         if self.fit_pulses:
@@ -785,18 +827,34 @@ class DoublePeriodicExponentialModel(BaseModel):
     def prior(self, hypercube):
         theta = np.zeros(self.nDims)
 
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("double_periodic_exp", "amplitude")
+        tau_range = self.settings.get_prior_range("double_periodic_exp", "tau")
+        sigma_range = self.settings.get_prior_range("double_periodic_exp", "sigma")
+        
+        # Get periodic-specific ranges
+        periodic_range = self.settings.get_prior_range("periodic", "period")
+        u0_range = self.settings.get_prior_range("periodic", "u0")
+        
+        # Calculate max values for u0 and period if not specified
+        u0_max_1 = u0_range["max"] if u0_range["max"] is not None else 4.0 / self.n1
+        period_max_1 = periodic_range["max"] if periodic_range["max"] is not None else 4.0 / self.n1
+        u0_max_2 = u0_range["max"] if u0_range["max"] is not None else 4.0 / self.n2
+        period_max_2 = periodic_range["max"] if periodic_range["max"] is not None else 4.0 / self.n2
+
         # First periodic model parameters
-        uniform_prior_A = UniformPrior(0.001, 1.0)
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
         theta[: self.n1] = uniform_prior_A(hypercube[: self.n1])  # A1_i
-        log_uniform_prior_tau = LogUniformPrior(0.0001, 1.0)
+        
+        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
         theta[self.n1 : 2 * self.n1] = log_uniform_prior_tau(
             hypercube[self.n1 : 2 * self.n1]
         )  # tau1_i
 
-        uniform_prior_u0 = UniformPrior(0.001, 4.0 / self.n1)
+        uniform_prior_u0 = UniformPrior(u0_range["min"], u0_max_1)
         theta[2 * self.n1] = uniform_prior_u0(hypercube[2 * self.n1])  # u0_1
 
-        uniform_prior_T = UniformPrior(0.001, 4.0 / self.n1)
+        uniform_prior_T = UniformPrior(periodic_range["min"], period_max_1)
         theta[2 * self.n1 + 1] = uniform_prior_T(hypercube[2 * self.n1 + 1])  # T1
 
         # Second periodic model parameters
@@ -816,19 +874,19 @@ class DoublePeriodicExponentialModel(BaseModel):
             )
         )  # tau2_i
 
-        uniform_prior_u0_2 = UniformPrior(0.001, 4.0 / self.n2)
+        uniform_prior_u0_2 = UniformPrior(u0_range["min"], u0_max_2)
         theta[start_second_theta + 2 * self.n2] = uniform_prior_u0_2(
             hypercube[start_second_hypercube + 2 * self.n2]
         )  # u0_2
 
-        uniform_prior_T2 = UniformPrior(0.001, 4.0 / self.n2)
+        uniform_prior_T2 = UniformPrior(periodic_range["min"], period_max_2)
         theta[start_second_theta + 2 * self.n2 + 1] = uniform_prior_T2(
             hypercube[start_second_hypercube + 2 * self.n2 + 1]
         )  # T2
 
         # Sigma
         sigma_index = start_second_theta + 2 * self.n2 + 2
-        log_uniform_prior = LogUniformPrior(0.001, 1.0)
+        log_uniform_prior = LogUniformPrior(sigma_range["min"], sigma_range["max"])
         theta[sigma_index] = log_uniform_prior(hypercube[sigma_index])  # sigma
 
         if self.fit_pulses:
@@ -880,6 +938,152 @@ class DoublePeriodicExponentialModel(BaseModel):
         if self.fit_pulses:
             index = self.get_sigma_param_index()
             return [index + 1, index + 2]
+        else:
+            return None
+
+
+class PeriodicEMGModel(BaseModel):
+    """
+    Periodic Exponentially Modified Gaussian (EMG) Model.
+
+    Similar to the EMGModel, but with a single period parameter controlling all peak locations.
+    """
+
+    def __init__(self, settings):
+        super().__init__(settings)
+        self.dim = 3  # A, tau, and w per peak
+        self.color = "purple"  # Assign a unique color for plotting
+        self._setup_parameters()
+
+    def _setup_parameters(self):
+        self.nDims = self.max_peaks * self.dim + 3  # A*npeak, tau*npeak, w*npeak, u0, T, sigma
+        if self.fit_pulses:
+            self.nDims += 1  # +1 for Npulse
+
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$A_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$\tau_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$w_{{{}}}$".format(i + 1))
+
+        self.paramnames_all.append(r"$u_0$")
+        self.paramnames_all.append(r"$T$")
+        self.paramnames_all.append(r"$\sigma$")
+        if self.fit_pulses:
+            self.paramnames_all.append(r"$N_{\text{pulse}}$")
+
+    def model_function(self, t, theta, n):
+        A = theta[0 : self.max_peaks]
+        tau = theta[self.max_peaks : 2 * self.max_peaks]
+        w = theta[2 * self.max_peaks : 3 * self.max_peaks]
+        u0 = theta[3 * self.max_peaks]
+        T = theta[3 * self.max_peaks + 1]
+
+        u_n = u0 + n * T
+        return (
+            (A[n] / (2 * tau[n]))
+            * np.exp(((u_n - t) / tau[n]) + ((2 * w[n] ** 2) / tau[n] ** 2))
+            * erfc((((u_n - t) * tau[n]) + w[n] ** 2) / (w[n] * tau[n] * np.sqrt(2)))
+        )
+
+    def prior(self, hypercube):
+        theta = np.zeros(self.nDims)
+        idx = 0  # Index tracker for hypercube
+
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("periodic_emg", "amplitude")
+        tau_range = self.settings.get_prior_range("periodic_emg", "tau")
+        width_range = self.settings.get_prior_range("periodic_emg", "width")
+        sigma_range = self.settings.get_prior_range("periodic_emg", "sigma")
+        
+        # Get periodic-specific ranges
+        periodic_range = self.settings.get_prior_range("periodic", "period")
+        u0_range = self.settings.get_prior_range("periodic", "u0")
+        
+        # Calculate max values for u0 and period if not specified
+        u0_max = u0_range["max"] if u0_range["max"] is not None else 4.0 / self.max_peaks
+        period_max = periodic_range["max"] if periodic_range["max"] is not None else 4.0 / self.max_peaks
+
+        # Sample amplitudes A_i
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
+        theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
+        idx += self.max_peaks
+
+        # Sample decay times τ_i
+        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
+        theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
+            hypercube[idx : idx + self.max_peaks]
+        )
+        idx += self.max_peaks
+
+        # Sample width parameters w_i
+        uniform_prior_w = UniformPrior(width_range["min"], width_range["max"])
+        theta[2 * self.max_peaks : 3 * self.max_peaks] = uniform_prior_w(
+            hypercube[idx : idx + self.max_peaks]
+        )
+        idx += self.max_peaks
+
+        # Sample u0
+        uniform_prior_u0 = UniformPrior(u0_range["min"], u0_max)
+        theta[3 * self.max_peaks] = uniform_prior_u0(hypercube[idx])
+        idx += 1
+
+        # Sample T
+        uniform_prior_T = UniformPrior(periodic_range["min"], period_max)
+        theta[3 * self.max_peaks + 1] = uniform_prior_T(hypercube[idx])
+        idx += 1
+
+        # Sample sigma
+        log_uniform_prior_sigma = LogUniformPrior(sigma_range["min"], sigma_range["max"])
+        theta[3 * self.max_peaks + 2] = log_uniform_prior_sigma(hypercube[idx])
+        idx += 1
+
+        if self.fit_pulses:
+            # Sample Npulse
+            Npulse_prior = UniformPrior(1, self.max_peaks + 1)
+            theta[3 * self.max_peaks + 3] = Npulse_prior(hypercube[idx])
+
+        return theta
+
+    def loglikelihood(self, theta, data):
+        pp = data["pp"]
+        t = data["t"]
+
+        sigma = theta[3 * self.max_peaks + 2]
+        if self.fit_pulses:
+            Npulse = theta[3 * self.max_peaks + 3]
+        else:
+            Npulse = self.max_peaks
+
+        pp_ = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
+        for n in range(int(Npulse)):
+            pp_ += self.model_function(t, theta, n)
+
+        diff = pp - pp_
+        logL = (-0.5 * np.sum((diff**2) / (sigma**2))) - (
+            len(t) * np.log(sigma * np.sqrt(2 * np.pi))
+        )
+
+        return logL, []
+
+    @property
+    def has_w(self):
+        return True
+
+    def get_period_param_indices(self):
+        return [3 * self.max_peaks + 1]
+
+    def get_u0_param_indices(self):
+        return [3 * self.max_peaks]
+
+    def get_sigma_param_index(self):
+        return 3 * self.max_peaks + 2
+
+    def get_Npulse_param_index(self):
+        if self.fit_pulses:
+            return 3 * self.max_peaks + 3
         else:
             return None
 

@@ -6,7 +6,47 @@ desired_time_res: 7.86432e-3  # s
 freq_min: 400
 freq_max: 800
 max_peaks: 1
-file_root: "exponential_test"
+file_root: "emg_test"
 fit_pulses: True  # Set to True to fit the number of pulses
-model: "exponential"
-base_dir: "chains_exp"
+model: "emg"
+base_dir: "chains_emg"
+
+# Prior ranges for model parameters
+prior_ranges:
+  # Common priors across all models
+  amplitude:
+    min: 0.0001
+    max: 0.1
+  tau:
+    min: 0.0001
+    max: 4.0
+  u:
+    min: 0.001
+    max: 4.0
+  sigma:
+    min: 0.001
+    max: 1.0
+  
+  # Model-specific priors
+  emg:
+    width:
+      min: 0.01
+      max: 1.0
+  
+  exponential:
+    amplitude:  # Override common amplitude range for exponential model
+      min: 0.001
+      max: 0.1
+  
+  periodic_emg:
+    width:
+      min: 0.01
+      max: 1.0
+  
+  periodic:
+    u0:
+      min: 0.001
+      # max is calculated based on max_peaks
+    period:
+      min: 0.001
+      # max is calculated based on max_peaks
