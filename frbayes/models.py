@@ -242,7 +242,7 @@ class EMGModel(BaseModel):
 
         return (
             (A[i] / (2 * tau[i]))
-            * np.exp(((u[i] - t) / tau[i]) + ((2 * w[i] ** 2) / tau[i] ** 2))
+            * np.exp(((u[i] - t) / tau[i]) + ((w[i] ** 2) / (2 * tau[i] ** 2)))
             * erfc((((u[i] - t) * tau[i]) + w[i] ** 2) / (w[i] * tau[i] * np.sqrt(2)))
         )
 
