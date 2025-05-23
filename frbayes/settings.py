@@ -1,3 +1,4 @@
+import os
 import yaml
 
 
@@ -28,39 +29,59 @@ class Settings:
     Class to manage global settings loaded from a YAML configuration file.
 
     Attributes:
-        _config_file (str): Path to the YAML configuration file.
-        settings (dict): Dictionary of settings loaded from the YAML file.
+        _settings_file (str): Path to the YAML configuration file.
+        _settings (dict): Dictionary of settings loaded from the YAML file.
     """
 
-    def __init__(self, config_file="settings.yaml"):
+    def __init__(self, settings_file=None):
         """
         Initialize the Settings class by loading settings from the configuration file.
 
         Args:
-            config_file (str): Path to the YAML configuration file.
+            settings_file (str): Path to the YAML configuration file.
         """
-        self._config_file = config_file
-        self.settings = None
-        self.load_settings()
+        if settings_file:
+            self.settings_file = settings_file
+        else:
+            env_settings_file = os.environ.get("FRBAYES_SETTINGS_FILE")
+            if env_settings_file:
+                self.settings_file = env_settings_file
+            else:
+                self.settings_file = "settings.yaml" # Default fallback
 
-    def load_settings(self):
+        self._settings = self._load_settings()
+
+    def _load_settings(self):
         """
         Load settings from the YAML configuration file.
         """
-        with open(self._config_file, "r") as file:
-            self.settings = yaml.safe_load(file)
+        with open(self.settings_file, "r") as file:
+            settings = yaml.safe_load(file) or {} # Ensure settings is a dictionary even if file is empty
+        
+        # Set default for use_paper_preprocessing if not present
+        if "preprocessing" not in settings:
+            settings["preprocessing"] = {}
+        if "use_paper_preprocessing" not in settings["preprocessing"]:
+            settings["preprocessing"]["use_paper_preprocessing"] = False
+        
+        # Set default for process_raw_no_downsample if not present
+        if "process_raw_no_downsample" not in settings["preprocessing"]:
+            settings["preprocessing"]["process_raw_no_downsample"] = False
+        
+        return settings
 
-    def get(self, key):
+    def get(self, key, default=None):
         """
         Retrieve a value from the settings dictionary.
 
         Args:
             key (str): The key of the setting to retrieve.
+            default: The default value to return if the key is not found.
 
         Returns:
-            The value associated with the given key, or None if the key is not found.
+            The value associated with the given key, or default if the key is not found.
         """
-        return self.settings.get(key, None)
+        return self._settings.get(key, default)
         
     def get_prior_range(self, model_type, param_type):
         """
@@ -74,7 +95,7 @@ class Settings:
             dict: A dictionary with 'min' and 'max' values for the prior range
         """
         # Check if prior ranges are defined in settings
-        prior_ranges = self.settings.get("prior_ranges", {})
+        prior_ranges = self._settings.get("prior_ranges", {})
         
         # Check for model-specific override
         if model_type in prior_ranges and param_type in prior_ranges[model_type]:
@@ -102,7 +123,7 @@ class Settings:
             key (str): The key of the setting to set.
             value: The value to associate with the key.
         """
-        self.settings[key] = value
+        self._settings[key] = value
 
 
 # Global settings instance

@@ -16,7 +16,7 @@ def calculate_snr(wfall_downsampled, pulse_profile):
     noise_std = np.nanstd(wfall_downsampled)
 
     # Calculate Pulse Profile SNR
-    pulse_profile_snr = pulse_profile / noise_std
+    pulse_profile_snr = np.atleast_1d(pulse_profile / noise_std)
 
     # Calculate residual noise
     residual_noise = np.nanstd(wfall_downsampled, axis=0) - np.nanmedian(

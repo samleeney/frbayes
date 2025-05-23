@@ -149,8 +149,8 @@ class EMGModel(BaseModel):
         idx += self.max_peaks
 
         # Sample decay times τ_i
-        log_uniform_prior_tau = LogUniformPrior(tau_range["min"], tau_range["max"])
-        theta[self.max_peaks : 2 * self.max_peaks] = log_uniform_prior_tau(
+        uniform_prior_tau = UniformPrior(tau_range["min"], tau_range["max"])
+        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior_tau(
             hypercube[idx : idx + self.max_peaks]
         )
         idx += self.max_peaks
@@ -240,9 +240,353 @@ class EMGModel(BaseModel):
         u = theta[2 * self.max_peaks : 3 * self.max_peaks]
         w = theta[3 * self.max_peaks : 4 * self.max_peaks]
 
+        exp_arg = ((u[i] - t) / tau[i]) + ((2 * w[i] ** 2) / (tau[i] ** 2))
+        exp_val = np.exp(exp_arg)
+
+        erfc_arg = ((((u[i] - t) * tau[i]) + w[i] ** 2) / (w[i] * tau[i] * np.sqrt(2)))
+        erfc_val = erfc(erfc_arg)
+
+        return (A[i] / (2 * tau[i])) * exp_val * erfc_val
+
+    @property
+    def has_w(self):
+        return True
+
+    def get_sigma_param_index(self):
+        index = 4 * self.max_peaks
+        return index
+
+    def get_Npulse_param_index(self):
+        if self.fit_pulses:
+            return self.nDims - 1  # Npulse is the last parameter
+        else:
+            return None
+
+
+class EMGModelWithBaseline(BaseModel):
+    """
+    Exponentially Modified Gaussian (EMG) Model with a constant baseline offset.
+
+    Inherits from BaseModel and implements the EMG model specifics with an added baseline.
+    """
+
+    def __init__(self, settings):
+        super().__init__(settings)
+        self.dim = 4  # Number of parameters per peak for EMG model
+        self.color = "cyan"  # Assign a unique color for plotting
+        self._setup_parameters()
+
+    def _setup_parameters(self):
+        """
+        Setup model parameters and names.
+        """
+        self.paramnames_all = []  # Reset to avoid duplication
+        self.nDims = self.max_peaks * self.dim + 2  # +2 for sigma and baseline
+        if self.fit_pulses:
+            self.nDims += 1  # +1 for Npulse
+
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$A_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$\tau_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$u_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$w_{{{}}}$".format(i + 1))
+        self.paramnames_all.append(r"$B_{\text{offset}}$") # Baseline offset
+        self.paramnames_all.append(r"$\sigma$")
+        if self.fit_pulses:
+            self.paramnames_all.append(r"$N_{\text{pulse}}$")
+
+    def prior(self, hypercube):
+        theta = np.zeros(self.nDims)
+        idx = 0  # Index tracker for hypercube
+
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("emg", "amplitude")
+        tau_range = self.settings.get_prior_range("emg", "tau")
+        u_range = self.settings.get_prior_range("emg", "u")
+        width_range = self.settings.get_prior_range("emg", "width")
+        baseline_range = self.settings.get_prior_range("emg_with_baseline", "baseline_offset")
+        sigma_range = self.settings.get_prior_range("emg", "sigma")
+
+        # Sample amplitudes A_i
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
+        theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
+        idx += self.max_peaks
+
+        # Sample decay times τ_i
+        uniform_prior_tau = UniformPrior(tau_range["min"], tau_range["max"])
+        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior_tau(
+            hypercube[idx : idx + self.max_peaks]
+        )
+        idx += self.max_peaks
+
+        # Sample arrival times u_i
+        u_hypercube = hypercube[idx : idx + self.max_peaks]
+        idx += self.max_peaks
+
+        # Sample width parameters w_i
+        uniform_prior_w = UniformPrior(width_range["min"], width_range["max"])
+        theta[3 * self.max_peaks : 4 * self.max_peaks] = uniform_prior_w(
+            hypercube[idx : idx + self.max_peaks]
+        )
+        idx += self.max_peaks
+
+        # Sample baseline offset
+        uniform_prior_baseline = UniformPrior(baseline_range["min"], baseline_range["max"])
+        theta[4 * self.max_peaks] = uniform_prior_baseline(hypercube[idx])
+        idx += 1
+
+        # Sample sigma
+        log_uniform_prior_sigma = LogUniformPrior(sigma_range["min"], sigma_range["max"])
+        theta[4 * self.max_peaks + 1] = log_uniform_prior_sigma(hypercube[idx])
+        idx += 1
+
+        if self.fit_pulses:
+            # Sample Npulse
+            Npulse_prior = UniformPrior(1, self.max_peaks + 1)
+            Npulse = Npulse_prior(hypercube[idx])
+            idx += 1
+        else:
+            Npulse = self.max_peaks
+
+        # Assign u_i to theta using Npulse
+        if int(Npulse) > 0:
+            # Using sorted prior for active pulses
+            sorted_prior_u = SortedUniformPrior(u_range["min"], u_range["max"])
+            active_u = sorted_prior_u(u_hypercube[:int(Npulse)])
+            theta[2 * self.max_peaks : 2 * self.max_peaks + int(Npulse)] = active_u
+
+            if int(Npulse) < self.max_peaks:
+                # Uniform prior for inactive pulses
+                uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
+                inactive_u = uniform_prior_u(u_hypercube[int(Npulse):])
+                theta[2 * self.max_peaks + int(Npulse) : 3 * self.max_peaks] = inactive_u
+        else:
+            # If Npulse is 0 (unlikely), all u_i are uniform
+            uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
+            theta[2 * self.max_peaks : 3 * self.max_peaks] = uniform_prior_u(u_hypercube)
+
+        if self.fit_pulses:
+            theta[-1] = Npulse  # Npulse is the last parameter
+
+        return theta
+
+    def loglikelihood(self, theta, data):
+        pp = data["pp"]
+        t = data["t"]
+
+        baseline_offset = theta[4 * self.max_peaks]
+        sigma = theta[4 * self.max_peaks + 1]
+        if self.fit_pulses:
+            Npulse = theta[-1]  # Npulse is the last parameter
+        else:
+            Npulse = self.max_peaks
+
+        pp_model_components = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
+        for i in range(int(Npulse)):
+            pp_model_components += self.model_function(t, theta, i)
+        
+        pp_ = pp_model_components + baseline_offset
+
+        diff = pp - pp_
+        logL = (-0.5 * np.sum((diff ** 2) / (sigma ** 2))) - (
+            len(t) * np.log(sigma * np.sqrt(2 * np.pi))
+        )
+
+        return logL, []
+
+    def model_function(self, t, theta, i):
+        """
+        Compute the EMG model function for peak i.
+
+        Args:
+            t (array): Time axis.
+            theta (array): Model parameters.
+            i (int): Index of the peak.
+
+        Returns:
+            array: Model function evaluated at time t for peak i.
+        """
+        A = theta[0 : self.max_peaks]
+        tau = theta[self.max_peaks : 2 * self.max_peaks]
+        u = theta[2 * self.max_peaks : 3 * self.max_peaks]
+        w = theta[3 * self.max_peaks : 4 * self.max_peaks]
+
+        exp_arg = ((u[i] - t) / tau[i]) + ((2 * w[i] ** 2) / (tau[i] ** 2))
+        exp_val = np.exp(exp_arg)
+
+        erfc_arg = ((((u[i] - t) * tau[i]) + w[i] ** 2) / (w[i] * tau[i] * np.sqrt(2)))
+        erfc_val = erfc(erfc_arg)
+
+        return (A[i] / (2 * tau[i])) * exp_val * erfc_val
+
+    @property
+    def has_w(self):
+        return True
+
+    def get_baseline_param_index(self):
+        return 4 * self.max_peaks
+
+    def get_sigma_param_index(self):
+        index = 4 * self.max_peaks + 1
+        return index
+
+    def get_Npulse_param_index(self):
+        if self.fit_pulses:
+            return self.nDims - 1  # Npulse is the last parameter
+        else:
+            return None
+
+
+class EMGModel_wrong(BaseModel):
+    """
+    Exponentially Modified Gaussian (EMG) Model - WRONG version for testing.
+    This version intentionally keeps an incorrect model_function.
+
+    Inherits from BaseModel and implements the EMG model specifics.
+    """
+
+    def __init__(self, settings):
+        super().__init__(settings)
+        self.dim = 4  # Number of parameters per peak for EMG model
+        self.color = "orange"  # Assign a unique color for plotting (distinct from correct EMG)
+        self._setup_parameters()
+
+    def _setup_parameters(self):
+        """
+        Setup model parameters and names.
+        """
+        self.paramnames_all = []  # Reset to avoid duplication
+        self.nDims = self.max_peaks * self.dim + 1  # +1 for sigma
+        if self.fit_pulses:
+            self.nDims += 1  # +1 for Npulse
+
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$A_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$\tau_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$u_{{{}}}$".format(i + 1))
+        for i in range(self.max_peaks):
+            self.paramnames_all.append(r"$w_{{{}}}$".format(i + 1))
+        self.paramnames_all.append(r"$\sigma$")
+        if self.fit_pulses:
+            self.paramnames_all.append(r"$N_{\text{pulse}}$")
+
+    def prior(self, hypercube):
+        theta = np.zeros(self.nDims)
+        idx = 0  # Index tracker for hypercube
+
+        # Get prior ranges from settings
+        amplitude_range = self.settings.get_prior_range("emg", "amplitude")
+        tau_range = self.settings.get_prior_range("emg", "tau")
+        u_range = self.settings.get_prior_range("emg", "u")
+        width_range = self.settings.get_prior_range("emg", "width")
+        sigma_range = self.settings.get_prior_range("emg", "sigma")
+
+        # Sample amplitudes A_i
+        uniform_prior_A = UniformPrior(amplitude_range["min"], amplitude_range["max"])
+        theta[: self.max_peaks] = uniform_prior_A(hypercube[idx : idx + self.max_peaks])
+        idx += self.max_peaks
+
+        # Sample decay times τ_i
+        uniform_prior_tau = UniformPrior(tau_range["min"], tau_range["max"])
+        theta[self.max_peaks : 2 * self.max_peaks] = uniform_prior_tau(
+            hypercube[idx : idx + self.max_peaks]
+        )
+        idx += self.max_peaks
+
+        # Sample arrival times u_i
+        u_hypercube = hypercube[idx : idx + self.max_peaks]
+        idx += self.max_peaks
+
+        # Sample width parameters w_i
+        uniform_prior_w = UniformPrior(width_range["min"], width_range["max"])
+        theta[3 * self.max_peaks : 4 * self.max_peaks] = uniform_prior_w(
+            hypercube[idx : idx + self.max_peaks]
+        )
+        idx += self.max_peaks
+
+        # Sample sigma
+        log_uniform_prior_sigma = LogUniformPrior(sigma_range["min"], sigma_range["max"])
+        theta[4 * self.max_peaks] = log_uniform_prior_sigma(hypercube[idx])
+        idx += 1
+
+        if self.fit_pulses:
+            # Sample Npulse
+            Npulse_prior = UniformPrior(1, self.max_peaks + 1)
+            Npulse = Npulse_prior(hypercube[idx])
+            idx += 1
+        else:
+            Npulse = self.max_peaks
+
+        # Assign u_i to theta using Npulse
+        if int(Npulse) > 0:
+            # Using sorted prior for active pulses
+            sorted_prior_u = SortedUniformPrior(u_range["min"], u_range["max"])
+            active_u = sorted_prior_u(u_hypercube[:int(Npulse)])
+            theta[2 * self.max_peaks : 2 * self.max_peaks + int(Npulse)] = active_u
+
+            if int(Npulse) < self.max_peaks:
+                # Uniform prior for inactive pulses
+                uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
+                inactive_u = uniform_prior_u(u_hypercube[int(Npulse):])
+                theta[2 * self.max_peaks + int(Npulse) : 3 * self.max_peaks] = inactive_u
+        else:
+            # If Npulse is 0 (unlikely), all u_i are uniform
+            uniform_prior_u = UniformPrior(u_range["min"], u_range["max"])
+            theta[2 * self.max_peaks : 3 * self.max_peaks] = uniform_prior_u(u_hypercube)
+
+        if self.fit_pulses:
+            theta[-1] = Npulse  # Npulse is the last parameter
+
+        return theta
+
+    def loglikelihood(self, theta, data):
+        pp = data["pp"]
+        t = data["t"]
+
+        sigma = theta[4 * self.max_peaks]
+        if self.fit_pulses:
+            Npulse = theta[-1]  # Npulse is the last parameter
+        else:
+            Npulse = self.max_peaks
+
+        pp_ = np.zeros(len(t))
+        # Due to the size of the time array, it is not efficient to vectorize this loop
+        for i in range(int(Npulse)):
+            pp_ += self.model_function(t, theta, i)
+
+        diff = pp - pp_
+        logL = (-0.5 * np.sum((diff ** 2) / (sigma ** 2))) - (
+            len(t) * np.log(sigma * np.sqrt(2 * np.pi))
+        )
+
+        return logL, []
+
+    def model_function(self, t, theta, i):
+        """
+        Compute the EMG model function for peak i (INCORRECT VERSION).
+
+        Args:
+            t (array): Time axis.
+            theta (array): Model parameters.
+            i (int): Index of the peak.
+
+        Returns:
+            array: Model function evaluated at time t for peak i.
+        """
+        A = theta[0 : self.max_peaks]
+        tau = theta[self.max_peaks : 2 * self.max_peaks]
+        u = theta[2 * self.max_peaks : 3 * self.max_peaks]
+        w = theta[3 * self.max_peaks : 4 * self.max_peaks]
+
         return (
             (A[i] / (2 * tau[i]))
-            * np.exp(((u[i] - t) / tau[i]) + ((w[i] ** 2) / (2 * tau[i] ** 2)))
+            * np.exp(((u[i] - t) / tau[i]) + ((w[i] ** 2) / (2 * tau[i] ** 2)))  # Original "wrong" term
             * erfc((((u[i] - t) * tau[i]) + w[i] ** 2) / (w[i] * tau[i] * np.sqrt(2)))
         )
 
@@ -407,7 +751,7 @@ class PeriodicExponentialModel(BaseModel):
     def __init__(self, settings):
         super().__init__(settings)
         self.dim = 2  # 2 params per peak
-        self.color = "red"  # Assign a unique color for plotting
+        self.color = "green"  # Assign a unique color for plotting
         self._setup_parameters()
 
     def _setup_parameters(self):
@@ -519,7 +863,7 @@ class PeriodicExponentialModel(BaseModel):
 
     def get_Npulse_param_index(self):
         if self.fit_pulses:
-            return 2 * self.max_peaks + 3
+            return self.nDims - 1  # Npulse is the last parameter
         else:
             return None
 
@@ -1094,6 +1438,8 @@ def get_model(model_name, settings):
     """
     if model_name == "emg":
         return EMGModel(settings)
+    elif model_name == "emg_with_baseline":
+        return EMGModelWithBaseline(settings)
     elif model_name == "exponential":
         return ExponentialModel(settings)
     elif model_name == "periodic_exponential":
@@ -1104,5 +1450,7 @@ def get_model(model_name, settings):
         return DoublePeriodicExponentialModel(settings)
     elif model_name == "periodic_exp_plus_exp":
         return PeriodicExponentialPlusExponentialModel(settings)
+    elif model_name == "emg_wrong":
+        return EMGModel_wrong(settings)
     else:
         raise ValueError(f"Model {model_name} not recognized.")

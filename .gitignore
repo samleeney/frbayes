@@ -12,7 +12,23 @@ frbayes.egg-info/
 model_comparison.png
 simulated_data.png
 subfast.slurm
-submit*
+submit_fast.sh
 test_vectorization.py
+2107.08463v2.pdf
+check_h5_contents.py
+docs/
+emg_parameter_effects.png
+frbayes copy/
+hsf_DR1/
+plot_emg_variations.py
+plot_raw_waterfall.py
+raw_waterfall_visualization.png
+setings_working_exp.yaml
+settings_working_emg.yaml
+submit.slurm
+submit_all.sh
+test_preprocessing_modes.py
+test_results/
+test_run.sh
 
 
