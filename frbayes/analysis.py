@@ -23,6 +23,8 @@ MODEL_COLOR_MAPS = {
     "periodic_emg": plt.cm.Oranges_r,
     "double_periodic_exp": plt.cm.Purples_r,
     "periodic_exp_plus_exp": plt.cm.YlOrBr_r,
+    "emg_with_baseline": plt.cm.GnBu_r, # Added for EMGModelWithBaseline
+    "exponential_with_baseline": plt.cm.Oranges_r, # Added for ExponentialModelWithBaseline
 }
 
 MODEL_COLORS = {
@@ -32,6 +34,8 @@ MODEL_COLORS = {
     "periodic_emg": "orange",
     "double_periodic_exp": "magenta",
     "periodic_exp_plus_exp": "brown",
+    "emg_with_baseline": "cyan", # Added for EMGModelWithBaseline
+    "exponential_with_baseline": "orange", # Added for ExponentialModelWithBaseline
 }
 
 

@@ -23,6 +23,7 @@ def main():
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
+    print(f"main.py: slurm_job_id = {slurm_job_id}")
 
     fit_pulses_ = global_settings.get("fit_pulses", False) # Default to False if not specified
 
@@ -42,6 +43,7 @@ def main():
 
     # Update settings with the maximum number of peaks and file root
     global_settings.set("max_peaks", int(slurm_job_id))
+    print(f"main.py: global_settings.max_peaks set to {global_settings.get('max_peaks')}")
     global_settings.set(
         "file_root",
         f"fit_pulses={fit_pulses_}_{model_}_npeaks={slurm_job_id}",
