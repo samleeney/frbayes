@@ -8,11 +8,11 @@ freq_min: 400
 freq_max: 800
 max_peaks: 5
 preprocessing:
-  mode: "default"
-file_root: "emg"
-fit_pulses: True  # Set to True to fit the number of pulses
-model: "emg_with_baseline"
-base_dir: "chains_emg_baseline"
+  mode: "raw"
+file_root: "exponential_with_baseline_raw_wide"
+fit_pulses: True
+model: "exponential_with_baseline"
+base_dir: "chains_exponential_with_baseline_raw_wide"
 
 # Prior ranges for model parameters
 prior_ranges:
@@ -27,14 +27,14 @@ prior_ranges:
     min: 0.01
     max: 4.0
   sigma:
-    min: 0.009
-    max: 0.02
+    min: 0.000001
+    max: 1
   
   # Model-specific priors
   emg:
     width:
       min: 0.01
-      max: 1
+      max: 0.3
   
   exponential:
     amplitude:  # Override common amplitude range for exponential model
@@ -55,5 +55,9 @@ prior_ranges:
       # max is calculated based on max_peaks
   emg_with_baseline:
       baseline_offset:
-        min: -0.5
-        max: -0.45
+        min: -1.0
+        max: 1.0
+  exponential_with_baseline:
+      baseline_offset:
+        min: -1.0
+        max: 1.0

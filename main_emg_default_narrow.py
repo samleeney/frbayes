@@ -14,8 +14,8 @@ def main():
     runs the PolyChord sampler, and processes and visualizes the results.
     """
 
-    # Load global settings
-    global_settings._load_settings()
+    # Load global settings from the specific settings file
+    global_settings._load_settings(settings_file="settings_emg_default_narrow.yaml")
 
     # Handle SLURM job ID or default to 4
     slurm_job_id = (
@@ -37,12 +37,12 @@ def main():
     # Set the preprocessing mode based on environment variable or default
     preprocessing_mode_from_env = os.environ.get("PREPROCESSING_MODE")
     if preprocessing_mode_from_env is not None:
-        # Ensure the preprocessing section exists in global_settings
-        if "preprocessing" not in global_settings._settings:
-            global_settings._settings["preprocessing"] = {}
-        global_settings._settings["preprocessing"]["mode"] = preprocessing_mode_from_env
-    preprocessing_mode_ = global_settings.get("preprocessing", {}).get("mode", "default")
-    print("The preprocessing mode is " + preprocessing_mode_)
+        # Get current preprocessing settings or create empty dict
+        preprocessing_settings = global_settings.get("preprocessing", {})
+        preprocessing_settings["mode"] = preprocessing_mode_from_env
+        global_settings.set("preprocessing", preprocessing_settings)
+    preprocessing_mode = global_settings.get("preprocessing", {}).get("mode", "default")
+    print("The preprocessing mode is " + preprocessing_mode)
 
     # Optionally set base_dir from environment variable
     if os.environ.get("SLURM_JOB_NAME") is not None:

@@ -1,6 +1,6 @@
 import os
 from frbayes import data, analysis, sample
-from frbayes.settings import global_settings
+from frbayes.settings import Settings
 from frbayes.sample import FRBModel
 import sys
 
@@ -15,6 +15,7 @@ def main():
     """
 
     # Load global settings
+    global_settings = Settings(settings_file="settings_exponential_raw.yaml")
     global_settings._load_settings()
 
     # Handle SLURM job ID or default to 4
@@ -23,7 +24,6 @@ def main():
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
-    print(f"main.py: slurm_job_id = {slurm_job_id}")
 
     fit_pulses_ = global_settings.get("fit_pulses", False) # Default to False if not specified
 
@@ -34,16 +34,6 @@ def main():
     model_ = global_settings.get("model", "emg") # Default to "emg" if not specified
     print("The model is " + model_)
 
-    # Set the preprocessing mode based on environment variable or default
-    preprocessing_mode_from_env = os.environ.get("PREPROCESSING_MODE")
-    if preprocessing_mode_from_env is not None:
-        # Ensure the preprocessing section exists in global_settings
-        if "preprocessing" not in global_settings._settings:
-            global_settings._settings["preprocessing"] = {}
-        global_settings._settings["preprocessing"]["mode"] = preprocessing_mode_from_env
-    preprocessing_mode_ = global_settings.get("preprocessing", {}).get("mode", "default")
-    print("The preprocessing mode is " + preprocessing_mode_)
-
     # Optionally set base_dir from environment variable
     if os.environ.get("SLURM_JOB_NAME") is not None:
         base_dir_from_env = "chains_" + os.environ.get("SLURM_JOB_NAME")
@@ -52,8 +42,6 @@ def main():
     print("The base directory is " + base_dir_)
 
     # Update settings with the maximum number of peaks and file root
-    global_settings.set("max_peaks", int(slurm_job_id))
-    print(f"main.py: global_settings.max_peaks set to {global_settings.get('max_peaks')}")
     global_settings.set(
         "file_root",
         f"fit_pulses={fit_pulses_}_{model_}_npeaks={slurm_job_id}",

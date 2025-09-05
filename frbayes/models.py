@@ -174,7 +174,6 @@ class EMGModel(BaseModel):
             # Sample Npulse
             Npulse_prior = UniformPrior(1, self.max_peaks + 1)
             Npulse = Npulse_prior(hypercube[idx])
-            Npulse = int(np.floor(Npulse))
             Npulse = max(1, min(Npulse, self.max_peaks))
             idx += 1
         else:
@@ -348,7 +347,6 @@ class EMGModelWithBaseline(BaseModel):
             # Sample Npulse
             Npulse_prior = UniformPrior(1, self.max_peaks + 1)
             Npulse = Npulse_prior(hypercube[idx])
-            Npulse = int(np.floor(Npulse))
             Npulse = max(1, min(Npulse, self.max_peaks))
             idx += 1
         else:

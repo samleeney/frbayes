@@ -15,7 +15,8 @@ def main():
     """
 
     # Load global settings
-    global_settings._load_settings()
+    global_settings.settings_file = "settings_emg_with_baseline_paper_narrow.yaml"
+    global_settings._settings = global_settings._load_settings()
 
     # Handle SLURM job ID or default to 4
     slurm_job_id = (
@@ -23,7 +24,6 @@ def main():
         if os.environ.get("SLURM_ARRAY_TASK_ID") is None
         else int(os.environ.get("SLURM_ARRAY_TASK_ID"))
     )
-    print(f"main.py: slurm_job_id = {slurm_job_id}")
 
     fit_pulses_ = global_settings.get("fit_pulses", False) # Default to False if not specified
 
@@ -33,16 +33,6 @@ def main():
         global_settings.set("model", model_from_env)
     model_ = global_settings.get("model", "emg") # Default to "emg" if not specified
     print("The model is " + model_)
-
-    # Set the preprocessing mode based on environment variable or default
-    preprocessing_mode_from_env = os.environ.get("PREPROCESSING_MODE")
-    if preprocessing_mode_from_env is not None:
-        # Ensure the preprocessing section exists in global_settings
-        if "preprocessing" not in global_settings._settings:
-            global_settings._settings["preprocessing"] = {}
-        global_settings._settings["preprocessing"]["mode"] = preprocessing_mode_from_env
-    preprocessing_mode_ = global_settings.get("preprocessing", {}).get("mode", "default")
-    print("The preprocessing mode is " + preprocessing_mode_)
 
     # Optionally set base_dir from environment variable
     if os.environ.get("SLURM_JOB_NAME") is not None:
