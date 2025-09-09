@@ -1,81 +1,66 @@
-# FRBayes - JAX Implementation
+# FRBayes
 
-A JAX-based implementation of FRBayes for Fast Radio Burst (FRB) parameter inference using nested sampling with BlackJAX.
+Fast Radio Burst Bayesian Analysis - JAX Implementation
 
-## Features
+## Overview
 
-- **JAX-based models**: Exponential Modified Gaussian (EMG), Exponential, and Periodic models
-- **Model selection**: Variable number of pulses with continuous Npulse parameter
-- **Nested sampling**: BlackJAX implementation with proper convergence criteria
-- **GPU acceleration**: Automatic GPU detection and configuration
-- **Visualization**: Corner plots and functional posteriors with anesthetic and fgivenx
+This repository contains a JAX-based implementation of FRBayes for analyzing Fast Radio Burst (FRB) pulse profiles using Bayesian nested sampling. The implementation leverages JAX for automatic differentiation and JIT compilation, and BlackJAX for efficient nested sampling.
 
-## Installation
+## Main Implementation
 
-```bash
-# Install dependencies
-pip install jax jaxlib blackjax anesthetic fgivenx matplotlib numpy scipy
-```
+The primary implementation is in `frbayes_jax/` which provides:
+
+- **High-performance models**: JIT-compiled pulse models (EMG, Exponential)
+- **Bayesian inference**: BlackJAX nested sampling for parameter estimation
+- **Model selection**: Automatic determination of the number of pulses
+- **Visualization**: Integration with anesthetic and fgivenx for posterior analysis
 
 ## Quick Start
 
-```python
-import jax
-import jax.numpy as jnp
-from models import get_model, ModelConfig
-from inference.blackjax_nested_sampling import BlackJAXNestedSampler
-
-# Create model
-model = get_model('emg', ModelConfig(max_peaks=2, fit_pulses=False))
-
-# Generate synthetic data
-t = jnp.linspace(0, 5, 100)
-true_params = {
-    'A': jnp.array([0.08, 0.06]),
-    'tau': jnp.array([0.5, 0.3]),
-    'u': jnp.array([1.5, 3.0]),
-    'w': jnp.array([0.2, 0.15]),
-    'sigma': jnp.array([0.003])
-}
-
-# Run nested sampling
-sampler = BlackJAXNestedSampler(model, data, prior_config)
-results = sampler.run(key, num_live_points=500, max_samples=50000)
-```
-
-## Testing
-
 ```bash
-# Run tests
-pytest tests/test_nested_sampling.py -v
+# Install dependencies
+pip install jax jaxlib blackjax anesthetic fgivenx matplotlib numpy scipy pyyaml tqdm
+pip install git+https://github.com/handley-lab/blackjax@nested_sampling
 
-# Run example scripts
-python tests/2peak_fixed_test.py
-python tests/2peak_fitpulses_test.py
+# Run tests
+cd frbayes_jax/tests
+python test_verification.py
 ```
 
-## Model Types
+## Directory Structure
 
-- **EMG**: Exponential Modified Gaussian for FRB pulses
-- **Exponential**: Simple exponential decay model
-- **Periodic**: For periodic signals
-- **Combined**: Combines multiple model types
+```
+frbayes/
+├── frbayes_jax/        # Main JAX implementation
+│   ├── frbayes_jax/    # Package modules
+│   ├── tests/          # Test suite
+│   └── README.md       # Detailed documentation
+└── archive/            # Archived files and older implementations
+```
 
-## Key Features
+## Features
 
-### Continuous Npulse
-The number of pulses is sampled as a continuous parameter for proper model selection, only discretized where necessary for computations.
+- **Multiple pulse models**: EMG (Exponentially Modified Gaussian) and Exponential
+- **Flexible inference**: Fix or fit the number of pulses
+- **JAX acceleration**: Fully JIT-compilable for fast execution
+- **Robust sampling**: BlackJAX nested sampling with proper prior handling
 
-### Proper Convergence
-Nested sampling runs until the convergence criterion is met (log(Z_live) - log(Z) < -precision_criterion) rather than stopping at a fixed iteration count.
+## Tests
 
-### GPU Support
-Automatic GPU detection and memory management with configurable memory fraction.
+The implementation includes comprehensive tests:
 
-## Citation
+1. **Fixed number of pulses**: Tests parameter recovery with known number of pulses
+2. **Fitted number of pulses**: Tests model selection capability
+3. **Verification suite**: Automated testing of both scenarios
 
-If you use this code, please cite the original FRBayes paper and acknowledge the JAX implementation.
+All tests pass successfully, demonstrating correct implementation.
 
 ## License
 
-MIT License
+[Add your license here]
+
+## Citation
+
+If you use this code in your research, please cite:
+- BlackJAX: Cabezas et al. (2024)
+- Nested Sampling: Handley et al.
