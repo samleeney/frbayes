@@ -125,6 +125,13 @@ def run_nested_sampling(
         high=jnp.exp(bounds['log_sigma']['max'])
     ))
     
+    # Npulse (if fitted) - uniform over integer range
+    if fit_pulses:
+        dists.append(distrax.Uniform(
+            low=1.0,
+            high=float(max_peaks)
+        ))
+    
     @jit
     def logprior_fn(theta):
         # Simple: sum log probabilities from each distribution

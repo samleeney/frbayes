@@ -123,12 +123,26 @@ def main():
     # Get parameter names
     param_names = get_param_names(model_name, max_peaks, fit_pulses)
     
-    # Create NestedSamples object
-    print("\nCreating NestedSamples object...")
+    # Save chains in anesthetic format
+    print("\nSaving chains in anesthetic format...")
+    # Save the chain data with dead-birth format
+    chain_path = os.path.join(output_dir, 'chains')
+    os.makedirs(os.path.dirname(chain_path) if os.path.dirname(chain_path) else '.', exist_ok=True)
+    
+    # Save particles, logL, and logL_birth
+    chain_data = np.column_stack([
+        final_state.particles,
+        final_state.loglikelihood,
+        final_state.loglikelihood_birth
+    ])
+    np.savetxt(f"{chain_path}_dead-birth.txt", chain_data)
+    print(f"Chains saved to {chain_path}_dead-birth.txt")
+    
+    # Create NestedSamples object for analysis
     nested_samples = anesthetic.NestedSamples(
         data=final_state.particles,
         logL=final_state.loglikelihood,
-        logL_birth=final_state.loglikelihood_birth,  # Already fixed in sampling.py
+        logL_birth=final_state.loglikelihood_birth,
     )
     
     # Get posterior statistics from anesthetic
@@ -140,9 +154,10 @@ def main():
         print(f"  {name}: {best_fit[i]:.3f} ± {std_fit[i]:.3f}")
     
     # Extract the fitted number of pulses
-    npulse_idx = -1  # Last parameter when fit_pulses=True
-    fitted_npulse = best_fit[npulse_idx]
-    print(f"\nFitted number of pulses: {fitted_npulse:.2f} ± {std_fit[npulse_idx]:.2f}")
+    npulse_param_name = param_names[-1]  # Last parameter when fit_pulses=True
+    fitted_npulse_mean = nested_samples[npulse_param_name].mean()
+    fitted_npulse_std = nested_samples[npulse_param_name].std()
+    print(f"\nFitted number of pulses: {fitted_npulse_mean:.2f} ± {fitted_npulse_std:.2f}")
     print(f"True number of pulses: 2")
     
     # Model function for fitted parameters (use max_peaks for evaluation)
@@ -167,17 +182,24 @@ def main():
     plt.close()
     print(f"\nModel comparison plot saved to {output_dir}/model_comparison.png")
     
-    # Create corner plot
-    print("\nCreating corner plot...")
-    try:
-        # Plot first 5 parameters and Npulse
-        indices = [0, 1, 4, 5, 8, 9, -1]  # A1, A2, tau1, tau2, u1, u2, Npulse
-        fig, axes = nested_samples.plot_2d(indices)
-        fig.savefig(os.path.join(output_dir, 'corner_plot.png'), dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"Corner plot saved to {output_dir}/corner_plot.png")
-    except Exception as e:
-        print(f"Warning: Could not create corner plot: {e}")
+    # Save parameter names for later use
+    with open(os.path.join(output_dir, 'param_names.txt'), 'w') as f:
+        for name in param_names:
+            f.write(f"{name}\n")
+    print(f"Parameter names saved to {output_dir}/param_names.txt")
+    
+    # Save metadata
+    metadata = {
+        'model_name': model_name,
+        'max_peaks': max_peaks,
+        'fit_pulses': fit_pulses,
+        'num_params': len(param_names),
+        'num_samples': len(final_state.particles)
+    }
+    import json
+    with open(os.path.join(output_dir, 'metadata.json'), 'w') as f:
+        json.dump(metadata, f, indent=2)
+    print(f"Metadata saved to {output_dir}/metadata.json")
     
     # Check model selection performance
     print("\n" + "="*60)
