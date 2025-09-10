@@ -78,13 +78,13 @@ def main():
     plt.close()
     print("Data plot saved to test_2pulses_fitted_data.png")
     
-    # Set up prior bounds (for up to 4 peaks)
+    # Set up prior bounds (using the user's requested wide priors)
     prior_bounds = {
-        'amplitude': {'min': 0.01, 'max': 2.0},
-        'tau': {'min': 0.1, 'max': 1.0},
-        'u': {'min': 0.0, 'max': 4.0},
-        'width': {'min': 0.01, 'max': 0.5},
-        'log_sigma': {'min': jnp.log(0.01), 'max': jnp.log(0.2)}
+        'amplitude': {'min': 0.001, 'max': 1},  # Very wide amplitude range
+        'tau': {'min': 0.1, 'max': 1.0},  # Set to [0.1, 1.0] to avoid numerical issues
+        'u': {'min': 0.0, 'max': 4.0},  # Match data range [0, 4]
+        'width': {'min': 0.01, 'max': 0.3},  # Reduced max to avoid exp overflow with small tau
+        'log_sigma': {'min': jnp.log(0.01), 'max': jnp.log(2.0)}  # Log-uniform for sigma
     }
     
     # Run nested sampling
@@ -98,7 +98,7 @@ def main():
     ndims = 18
     num_live_points = ndims * 25  # 450
     num_delete = num_live_points // 2  # 225
-    num_inner_steps = ndims * 10  # 180
+    num_inner_steps = ndims * 5  # 90
     
     final_state = run_nested_sampling(
         model_name=model_name,
