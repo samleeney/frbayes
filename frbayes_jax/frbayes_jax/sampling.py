@@ -5,12 +5,115 @@ import jax
 import jax.numpy as jnp
 from jax import jit, vmap
 import blackjax
-from blackjax.ns.utils import finalise
 import numpy as np
 from typing import Dict, Tuple, Optional, Callable
 import tqdm
 from .models import get_model_function, get_num_params, get_sigma_index, get_param_names
 from .priors import FRBPriors
+from blackjax.ns.base import NSInfo
+
+
+def finalise_chunked(state, dead, chunk_size=10):
+    """
+    Memory-efficient version of BlackJAX's finalise function.
+    Processes dead points in smaller batches to avoid memory issues.
+    
+    Args:
+        state: Final NSState with live particles
+        dead: List of NSInfo objects from dead points
+        chunk_size: Number of dead points to concatenate at once
+    
+    Returns:
+        Combined NSInfo object with all dead and live points
+    """
+    import jax
+    import jax.numpy as jnp
+    import gc
+    
+    # Handle edge case: no dead points
+    if len(dead) == 0:
+        return NSInfo(
+            state.particles,
+            state.loglikelihood,
+            state.loglikelihood_birth,
+            state.logprior,
+            None  # No inner kernel info
+        )
+    
+    # Process dead points in smaller chunks to avoid memory spikes
+    # First, concatenate dead points in small groups
+    processed_chunks = []
+    
+    for i in range(0, len(dead), chunk_size):
+        chunk = dead[i:min(i + chunk_size, len(dead))]
+        
+        if len(chunk) == 1:
+            processed_chunks.append(chunk[0])
+        else:
+            # Concatenate within this small chunk
+            # Use regular concatenate but with small number of arrays
+            chunk_particles = jnp.concatenate([d.particles for d in chunk], axis=0)
+            chunk_logL = jnp.concatenate([d.loglikelihood for d in chunk], axis=0)
+            chunk_logL_birth = jnp.concatenate([d.loglikelihood_birth for d in chunk], axis=0)
+            chunk_logprior = jnp.concatenate([d.logprior for d in chunk], axis=0)
+            
+            processed_chunks.append(NSInfo(
+                chunk_particles,
+                chunk_logL,
+                chunk_logL_birth,
+                chunk_logprior,
+                chunk[-1].inner_kernel_info  # Keep last kernel info
+            ))
+        
+        # Explicitly clear memory after each chunk
+        if i % (chunk_size * 10) == 0:
+            gc.collect()
+    
+    # Now we have fewer, larger chunks to combine
+    # Use iterative pairwise merging to avoid memory spikes
+    while len(processed_chunks) > 1:
+        next_level = []
+        
+        for i in range(0, len(processed_chunks), 2):
+            if i + 1 < len(processed_chunks):
+                # Merge pair
+                left = processed_chunks[i]
+                right = processed_chunks[i + 1]
+                
+                merged = NSInfo(
+                    jnp.concatenate([left.particles, right.particles], axis=0),
+                    jnp.concatenate([left.loglikelihood, right.loglikelihood], axis=0),
+                    jnp.concatenate([left.loglikelihood_birth, right.loglikelihood_birth], axis=0),
+                    jnp.concatenate([left.logprior, right.logprior], axis=0),
+                    right.inner_kernel_info  # Keep latest kernel info
+                )
+                next_level.append(merged)
+            else:
+                # Odd one out, just pass through
+                next_level.append(processed_chunks[i])
+        
+        processed_chunks = next_level
+        gc.collect()
+    
+    # Now add the final live points
+    final_live = NSInfo(
+        state.particles,
+        state.loglikelihood,
+        state.loglikelihood_birth,
+        state.logprior,
+        dead[-1].inner_kernel_info if len(dead) > 0 else None
+    )
+    
+    # Final concatenation
+    accumulated = processed_chunks[0] if processed_chunks else dead[0]
+    
+    return NSInfo(
+        jnp.concatenate([accumulated.particles, final_live.particles], axis=0),
+        jnp.concatenate([accumulated.loglikelihood, final_live.loglikelihood], axis=0),
+        jnp.concatenate([accumulated.loglikelihood_birth, final_live.loglikelihood_birth], axis=0),
+        jnp.concatenate([accumulated.logprior, final_live.logprior], axis=0),
+        final_live.inner_kernel_info
+    )
 
 
 def run_nested_sampling(
@@ -41,8 +144,6 @@ def run_nested_sampling(
         num_inner_steps: Number of MCMC steps between replacements
         log_tolerance: Termination criterion (log(Z_live/Z))
         seed: Random seed
-        verbose: Whether to print progress
-        max_iterations: Maximum number of iterations
     
     Returns:
         Dictionary containing sampling results
@@ -212,8 +313,38 @@ def run_nested_sampling(
     
     pbar.close()
     
-    # Finalize results - EXACTLY like in the example
-    final_state = finalise(state, dead)
+    print("\n" + "="*60)
+    print("SAMPLING COMPLETED - Starting post-processing")
+    print("="*60)
+    
+    # Clear memory before finalise to prevent OOM errors with large dead point arrays
+    import gc
+    gc.collect()
+    jax.clear_caches()  # Clear JAX's compiled function cache
+    
+    # Check memory status before finalise
+    print("\nMemory status before finalise:")
+    try:
+        stats = jax.devices()[0].memory_stats()
+        print(f"  Bytes in use: {stats['bytes_in_use'] / 1e9:.2f} GB")
+        print(f"  Peak bytes: {stats['peak_bytes_in_use'] / 1e9:.2f} GB")
+        print(f"  Bytes limit: {stats['bytes_limit'] / 1e9:.2f} GB")
+        print(f"  Available: {(stats['bytes_limit'] - stats['bytes_in_use']) / 1e9:.2f} GB")
+    except:
+        pass
+    
+    print(f"\nNumber of dead points to concatenate: {len(dead)}")
+    
+    # Dynamic chunk size: divide total dead points into ~10 chunks
+    chunk_size = max(1, len(dead) // 10)
+    print(f"Using chunk size: {chunk_size} (processing in ~{len(dead) // chunk_size + 1} batches)")
+    print(f"Attempting chunked finalise...")
+    
+    # Use our custom chunked finalise function
+    # This processes dead points in batches to avoid memory issues
+    final_state = finalise_chunked(state, dead, chunk_size=chunk_size)
+    
+    print("Chunked finalise completed successfully")
     
     # Fix NaN birth likelihoods from BlackJAX (issue with final live points)
     # Following standard nested sampling practice, set NaN values to max birth likelihood
