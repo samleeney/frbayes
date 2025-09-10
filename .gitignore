@@ -65,3 +65,17 @@ chains/
 
 # Documentation
 docs/_build/
+
+# Archive folders
+.archive/
+*/.archive/
+
+# Image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Markdown files (except README)
+*.md
+!README.md

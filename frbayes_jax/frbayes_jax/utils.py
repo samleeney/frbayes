@@ -1,93 +1,36 @@
 """
 Utility functions for FRBayes JAX.
 """
-import yaml
 import numpy as np
 import jax.numpy as jnp
-from typing import Dict, Any
 
 
-def load_settings(filename: str = "settings.yaml") -> Dict[str, Any]:
+def fix_nan_logL_birth(final_state):
     """
-    Load settings from YAML file.
+    Fix NaN values in logL_birth from BlackJAX's finalise function.
+    
+    BlackJAX's finalise function leaves NaN values for the birth likelihoods
+    of the final live points (those that survived from initialization to the end).
+    This breaks anesthetic's weight calculations.
+    
+    Following standard nested sampling practice (dynesty, PolyChord), we set
+    the birth likelihood of final live points to the maximum of the existing
+    birth likelihoods, since these points survived to the very end and represent
+    the highest likelihood region.
     
     Args:
-        filename: Path to settings file
-    
-    Returns:
-        Dictionary of settings
-    """
-    with open(filename, 'r') as f:
-        return yaml.safe_load(f)
-
-
-def get_default_prior_ranges(model_name: str) -> Dict:
-    """
-    Get default prior ranges for a model.
-    
-    Args:
-        model_name: Name of the model
-    
-    Returns:
-        Dictionary of prior ranges
-    """
-    # Common priors
-    common = {
-        "amplitude": {"min": 0.0001, "max": 15},
-        "tau": {"min": 0.1, "max": 1},
-        "u": {"min": 0.01, "max": 4.0},
-        "sigma": {"min": 0.00001, "max": 0.1}
-    }
-    
-    # Model-specific additions
-    if "emg" in model_name:
-        common["width"] = {"min": 0.001, "max": 0.3}
-    
-    if "baseline" in model_name:
-        common["baseline_offset"] = {"min": -1.0, "max": 1.0}
-    
-    # Exponential models use different amplitude range
-    if "exponential" in model_name and "emg" not in model_name:
-        common["amplitude"] = {"min": 0.001, "max": 0.1}
-    
-    return common
-
-
-def extract_prior_ranges_from_settings(settings: Dict, model_name: str) -> Dict:
-    """
-    Extract prior ranges from settings for a specific model.
-    
-    Args:
-        settings: Settings dictionary
-        model_name: Name of the model
-    
-    Returns:
-        Dictionary of prior ranges
-    """
-    # Start with defaults
-    prior_ranges = get_default_prior_ranges(model_name)
-    
-    # Override with settings if available
-    if "prior_ranges" in settings:
-        pr = settings["prior_ranges"]
+        final_state: The finalized state from BlackJAX nested sampling
         
-        # Common priors
-        for key in ["amplitude", "tau", "u", "sigma"]:
-            if key in pr:
-                prior_ranges[key] = pr[key]
-        
-        # Model-specific priors
-        if model_name in pr:
-            model_pr = pr[model_name]
-            for key, value in model_pr.items():
-                prior_ranges[key] = value
-        
-        # Handle baseline models
-        if "baseline" in model_name:
-            base_model = model_name.replace("_with_baseline", "")
-            if f"{base_model}_with_baseline" in pr:
-                baseline_pr = pr[f"{base_model}_with_baseline"]
-                if "baseline_offset" in baseline_pr:
-                    prior_ranges["baseline_offset"] = baseline_pr["baseline_offset"]
+    Returns:
+        Fixed logL_birth array with no NaN values
+    """
+    logL_birth = np.array(final_state.loglikelihood_birth)
+    nan_mask = np.isnan(logL_birth)
     
-    return prior_ranges
+    if np.any(nan_mask):
+        # Standard approach: final live points get the maximum birth likelihood
+        # since they survived to the end (highest likelihood region)
+        max_valid = np.nanmax(logL_birth)
+        logL_birth[nan_mask] = max_valid
+    
+    return logL_birth

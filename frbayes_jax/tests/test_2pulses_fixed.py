@@ -7,15 +7,16 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import anesthetic
+from anesthetic import make_2d_axes
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from frbayes_jax.models import emg_model, get_model_function, get_param_names
 from frbayes_jax.data import simulate_frb_data
-from frbayes_jax.sampling import run_nested_sampling, save_chains_for_anesthetic
+from frbayes_jax.sampling import run_nested_sampling
 from frbayes_jax.analysis import analyze_results
-from frbayes_jax.utils import get_default_prior_ranges
 
 
 def main():
@@ -78,20 +79,14 @@ def main():
     plt.close()
     print("Data plot saved to test_2pulses_fixed_data.png")
     
-    # Set up priors
-    prior_ranges = get_default_prior_ranges(model_name)
-    
-    # Make priors a bit wider around true values
-    prior_ranges["amplitude"]["min"] = 0.01
-    prior_ranges["amplitude"]["max"] = 2.0
-    prior_ranges["tau"]["min"] = 0.1
-    prior_ranges["tau"]["max"] = 1.0
-    prior_ranges["u"]["min"] = 0.0
-    prior_ranges["u"]["max"] = 4.0
-    prior_ranges["width"]["min"] = 0.01
-    prior_ranges["width"]["max"] = 0.5
-    prior_ranges["sigma"]["min"] = 0.001
-    prior_ranges["sigma"]["max"] = 0.2
+    # Set up prior bounds (using the user's requested wide priors)
+    prior_bounds = {
+        'amplitude': {'min': 0.001, 'max': 1},  # Very wide amplitude range
+        'tau': {'min': 0.1, 'max': 1.0},  # Set to [0.1, 1.0] to avoid numerical issues
+        'u': {'min': 0.0, 'max': 4.0},  # Match data range [0, 4]
+        'width': {'min': 0.01, 'max': 0.3},  # Reduced max to avoid exp overflow with small tau
+        'log_sigma': {'min': jnp.log(0.01), 'max': jnp.log(2.0)}  # Log-uniform for sigma
+    }
     
     # Run nested sampling
     print("\nRunning nested sampling...")
@@ -99,52 +94,53 @@ def main():
     print(f"  Max peaks: {max_peaks}")
     print(f"  Fit pulses: {fit_pulses}")
     
-    results = run_nested_sampling(
+    # Calculate proper nested sampling parameters
+    ndims = 9  # 2*(A, tau, u, w) + sigma = 8 + 1 = 9
+    num_live_points = ndims * 25  # 225
+    num_delete = num_live_points // 2  # 112
+    num_inner_steps = ndims * 5  # 45
+    
+    # Run nested sampling and get final_state directly
+    final_state = run_nested_sampling(
         model_name=model_name,
         data=data_np,
         t=t_np,
-        prior_ranges=prior_ranges,
+        prior_bounds=prior_bounds,
         max_peaks=max_peaks,
         fit_pulses=fit_pulses,
-        num_live_points=300,
-        num_delete=20,
-        num_inner_steps=5,
-        max_iterations=500,
-        log_tolerance=-1.0,
-        seed=123,
-        verbose=True
+        num_live_points=num_live_points,
+        num_delete=num_delete,
+        num_inner_steps=num_inner_steps,
+        log_tolerance=-3.0,
+        seed=123
     )
+    
+    
+    print("\nNested sampling completed.")
     
     # Create output directory
     output_dir = "results_2pulses_fixed"
     os.makedirs(output_dir, exist_ok=True)
     
-    # Analyze results
-    print("\nAnalyzing results...")
-    chain_file = os.path.join(output_dir, "chains")
-    analyze_results(
-        results=results,
-        model_name=model_name,
-        t=t_np,
-        data=data_np,
-        output_dir=output_dir,
-        chain_file=chain_file
+    # Get parameter names
+    param_names = get_param_names(model_name, max_peaks, fit_pulses)
+    
+    # Create NestedSamples object
+    print("\nCreating NestedSamples object...")
+    nested_samples = anesthetic.NestedSamples(
+        data=final_state.particles,
+        logL=final_state.loglikelihood,
+        logL_birth=final_state.loglikelihood_birth,  # Already fixed in sampling.py
     )
     
-    # Extract best-fit parameters (using posterior mean)
-    particles = results['particles']
-    weights = np.exp(results['logL'] - np.max(results['logL']))
-    weights = weights / np.sum(weights)
-    
-    best_fit = np.average(particles, axis=0, weights=weights)
-    std_fit = np.sqrt(np.average((particles - best_fit)**2, axis=0, weights=weights))
+    # Get posterior statistics from anesthetic
+    best_fit = nested_samples.mean().values
+    std_fit = nested_samples.std().values
     
     print("\nBest-fit parameters (posterior mean ± std):")
-    param_names = get_param_names(model_name, max_peaks, fit_pulses)
     for i, name in enumerate(param_names):
         print(f"  {name}: {best_fit[i]:.3f} ± {std_fit[i]:.3f}")
     
-    # Compare with true parameters
     print("\nComparison with true parameters:")
     print(f"  A1: true={true_params[0]:.3f}, fit={best_fit[0]:.3f} ± {std_fit[0]:.3f}")
     print(f"  A2: true={true_params[1]:.3f}, fit={best_fit[1]:.3f} ± {std_fit[1]:.3f}")
@@ -159,8 +155,6 @@ def main():
     # Plot best-fit model
     plt.figure(figsize=(10, 5))
     plt.plot(t_np, data_np, 'k.', alpha=0.5, markersize=2, label='Data')
-    
-    # True model
     plt.plot(t_np, np.array(true_model), 'r-', linewidth=2, alpha=0.7, label='True model')
     
     # Best-fit model
@@ -175,6 +169,18 @@ def main():
     plt.savefig(os.path.join(output_dir, 'model_comparison.png'), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"\nModel comparison plot saved to {output_dir}/model_comparison.png")
+    
+    # Create corner plot
+    print("\nCreating corner plot...")
+    try:
+        # Plot first 5 parameters
+        indices = np.arange(min(5, len(param_names)))
+        fig, axes = nested_samples.plot_2d(indices)
+        fig.savefig(os.path.join(output_dir, 'corner_plot.png'), dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"Corner plot saved to {output_dir}/corner_plot.png")
+    except Exception as e:
+        print(f"Warning: Could not create corner plot: {e}")
     
     print("\n" + "="*60)
     print("TEST COMPLETED SUCCESSFULLY")

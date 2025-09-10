@@ -25,10 +25,20 @@ def emg_pulse(t: jnp.ndarray, A: float, tau: float, u: float, w: float) -> jnp.n
     Returns:
         EMG pulse evaluated at time t
     """
+    # Proper EMG implementation using JAX-compatible error function
+    # Based on the original formula from archive/frbayes_cpu/frbayes/models.py
+    from jax.scipy.special import erfc
+    
+    # Direct calculation without safeguards
     exp_arg = ((u - t) / tau) + ((w ** 2) / (2 * tau ** 2))
+    
+    # Calculate erfc argument
     erfc_arg = (((u - t) * tau) + w ** 2) / (w * tau * jnp.sqrt(2))
     
-    return (A / (2 * tau)) * jnp.exp(exp_arg) * erfc(erfc_arg)
+    # EMG formula: combination of exponential decay and Gaussian convolution
+    emg = (A / (2 * tau)) * jnp.exp(exp_arg) * erfc(erfc_arg)
+    
+    return emg
 
 
 @jit
@@ -45,7 +55,10 @@ def exponential_pulse(t: jnp.ndarray, A: float, tau: float, u: float) -> jnp.nda
     Returns:
         Exponential pulse evaluated at time t
     """
-    return jnp.where(t <= u, 0.0, A * jnp.exp(-(t - u) / tau))
+    # Use a smooth sigmoid transition instead of sharp cutoff
+    # This maintains differentiability for the sampler
+    transition = jax.nn.sigmoid(10.0 * (t - u))
+    return A * transition * jnp.exp(-(t - u) / tau)
 
 
 def emg_model(t: jnp.ndarray, theta: jnp.ndarray, max_peaks: int, fit_pulses: bool) -> jnp.ndarray:

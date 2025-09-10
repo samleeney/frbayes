@@ -1,5 +1,4 @@
 """
-, 
 Test with simulated data: 2 pulses with fitted number of pulses.
 """
 import os
@@ -8,15 +7,14 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import anesthetic
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from frbayes_jax.models import emg_model, get_model_function, get_param_names
 from frbayes_jax.data import simulate_frb_data
-from frbayes_jax.sampling import run_nested_sampling, save_chains_for_anesthetic
-from frbayes_jax.analysis import analyze_results
-from frbayes_jax.utils import get_default_prior_ranges
+from frbayes_jax.sampling import run_nested_sampling
 
 
 def main():
@@ -80,20 +78,14 @@ def main():
     plt.close()
     print("Data plot saved to test_2pulses_fitted_data.png")
     
-    # Set up priors (for up to 4 peaks)
-    prior_ranges = get_default_prior_ranges(model_name)
-    
-    # Make priors a bit wider around true values
-    prior_ranges["amplitude"]["min"] = 0.01
-    prior_ranges["amplitude"]["max"] = 2.0
-    prior_ranges["tau"]["min"] = 0.1
-    prior_ranges["tau"]["max"] = 1.0
-    prior_ranges["u"]["min"] = 0.0
-    prior_ranges["u"]["max"] = 4.0
-    prior_ranges["width"]["min"] = 0.01
-    prior_ranges["width"]["max"] = 0.5
-    prior_ranges["sigma"]["min"] = 0.001
-    prior_ranges["sigma"]["max"] = 0.2
+    # Set up prior bounds (for up to 4 peaks)
+    prior_bounds = {
+        'amplitude': {'min': 0.01, 'max': 2.0},
+        'tau': {'min': 0.1, 'max': 1.0},
+        'u': {'min': 0.0, 'max': 4.0},
+        'width': {'min': 0.01, 'max': 0.5},
+        'log_sigma': {'min': jnp.log(0.01), 'max': jnp.log(0.2)}
+    }
     
     # Run nested sampling
     print("\nRunning nested sampling...")
@@ -101,127 +93,103 @@ def main():
     print(f"  Max peaks: {max_peaks} (searching for best number)")
     print(f"  Fit pulses: {fit_pulses}")
     
-    results = run_nested_sampling(
+    # Calculate proper nested sampling parameters
+    # When fitting Npulse: 4*(A, tau, u, w) + sigma + Npulse = 16 + 1 + 1 = 18
+    ndims = 18
+    num_live_points = ndims * 25  # 450
+    num_delete = num_live_points // 2  # 225
+    num_inner_steps = ndims * 10  # 180
+    
+    final_state = run_nested_sampling(
         model_name=model_name,
         data=data_np,
         t=t_np,
-        prior_ranges=prior_ranges,
+        prior_bounds=prior_bounds,
         max_peaks=max_peaks,
         fit_pulses=fit_pulses,
-        num_live_points=300,
-        num_delete=20,
-        num_inner_steps=5,
-        max_iterations=500,
-        log_tolerance=-1.0,
-        seed=123,
-        verbose=True
+        num_live_points=num_live_points,
+        num_delete=num_delete,
+        num_inner_steps=num_inner_steps,
+        log_tolerance=-3.0,
+        seed=123
     )
+    
+    print("\nNested sampling completed.")
     
     # Create output directory
     output_dir = "results_2pulses_fitted"
     os.makedirs(output_dir, exist_ok=True)
     
-    # Analyze results
-    print("\nAnalyzing results...")
-    chain_file = os.path.join(output_dir, "chains")
-    analyze_results(
-        results=results,
-        model_name=model_name,
-        t=t_np,
-        data=data_np,
-        output_dir=output_dir,
-        chain_file=chain_file
+    # Get parameter names
+    param_names = get_param_names(model_name, max_peaks, fit_pulses)
+    
+    # Create NestedSamples object
+    print("\nCreating NestedSamples object...")
+    nested_samples = anesthetic.NestedSamples(
+        data=final_state.particles,
+        logL=final_state.loglikelihood,
+        logL_birth=final_state.loglikelihood_birth,  # Already fixed in sampling.py
     )
     
-    # Extract best-fit parameters (using posterior mean)
-    particles = results['particles']
-    weights = np.exp(results['logL'] - np.max(results['logL']))
-    weights = weights / np.sum(weights)
-    
-    best_fit = np.average(particles, axis=0, weights=weights)
-    std_fit = np.sqrt(np.average((particles - best_fit)**2, axis=0, weights=weights))
+    # Get posterior statistics from anesthetic
+    best_fit = nested_samples.mean().values
+    std_fit = nested_samples.std().values
     
     print("\nBest-fit parameters (posterior mean ± std):")
-    param_names = get_param_names(model_name, max_peaks, fit_pulses)
     for i, name in enumerate(param_names):
         print(f"  {name}: {best_fit[i]:.3f} ± {std_fit[i]:.3f}")
     
-    # Get Npulse statistics
-    npulse_idx = -1  # Last parameter
-    npulse_samples = particles[:, npulse_idx]
-    npulse_rounded = np.round(npulse_samples).astype(int)
-    
-    # Count occurrences
-    unique, counts = np.unique(npulse_rounded, return_counts=True)
-    weighted_counts = np.zeros_like(counts, dtype=float)
-    for i, n in enumerate(unique):
-        mask = npulse_rounded == n
-        weighted_counts[i] = np.sum(weights[mask])
-    
-    print("\nNumber of pulses distribution:")
-    for n, w in zip(unique, weighted_counts):
-        print(f"  Npulse={n}: {w*100:.1f}%")
-    
-    most_probable_npulse = unique[np.argmax(weighted_counts)]
-    print(f"\nMost probable number of pulses: {most_probable_npulse}")
+    # Extract the fitted number of pulses
+    npulse_idx = -1  # Last parameter when fit_pulses=True
+    fitted_npulse = best_fit[npulse_idx]
+    print(f"\nFitted number of pulses: {fitted_npulse:.2f} ± {std_fit[npulse_idx]:.2f}")
     print(f"True number of pulses: 2")
     
-    # Compare fitted parameters for first 2 pulses
-    print("\nComparison with true parameters (first 2 pulses):")
-    print(f"  A1: true={true_params_2peaks[0]:.3f}, fit={best_fit[0]:.3f} ± {std_fit[0]:.3f}")
-    print(f"  A2: true={true_params_2peaks[1]:.3f}, fit={best_fit[1]:.3f} ± {std_fit[1]:.3f}")
-    print(f"  tau1: true={true_params_2peaks[2]:.3f}, fit={best_fit[max_peaks]:.3f} ± {std_fit[max_peaks]:.3f}")
-    print(f"  tau2: true={true_params_2peaks[3]:.3f}, fit={best_fit[max_peaks+1]:.3f} ± {std_fit[max_peaks+1]:.3f}")
-    print(f"  u1: true={true_params_2peaks[4]:.3f}, fit={best_fit[2*max_peaks]:.3f} ± {std_fit[2*max_peaks]:.3f}")
-    print(f"  u2: true={true_params_2peaks[5]:.3f}, fit={best_fit[2*max_peaks+1]:.3f} ± {std_fit[2*max_peaks+1]:.3f}")
-    print(f"  w1: true={true_params_2peaks[6]:.3f}, fit={best_fit[3*max_peaks]:.3f} ± {std_fit[3*max_peaks]:.3f}")
-    print(f"  w2: true={true_params_2peaks[7]:.3f}, fit={best_fit[3*max_peaks+1]:.3f} ± {std_fit[3*max_peaks+1]:.3f}")
-    print(f"  sigma: true={true_params_2peaks[8]:.3f}, fit={best_fit[4*max_peaks]:.3f} ± {std_fit[4*max_peaks]:.3f}")
-    
-    # Plot best-fit model
+    # Model function for fitted parameters (use max_peaks for evaluation)
     model_func = get_model_function(model_name)
     
-    plt.figure(figsize=(12, 5))
-    
-    # Left panel: Data and models
-    plt.subplot(1, 2, 1)
+    # Plot best-fit model
+    plt.figure(figsize=(10, 5))
     plt.plot(t_np, data_np, 'k.', alpha=0.5, markersize=2, label='Data')
-    
-    # True model
     plt.plot(t_np, np.array(true_model), 'r-', linewidth=2, alpha=0.7, label='True model (2 pulses)')
     
-    # Best-fit model
+    # Best-fit model with fitted number of pulses
     best_fit_model = model_func(t, jnp.array(best_fit), max_peaks, fit_pulses)
     plt.plot(t_np, np.array(best_fit_model), 'b-', linewidth=2, alpha=0.7, 
-             label=f'Best-fit model (Npulse≈{best_fit[-1]:.1f})')
+             label=f'Best-fit model (N≈{fitted_npulse:.1f})')
     
     plt.xlabel('Time')
     plt.ylabel('Signal')
-    plt.title('Model Comparison')
+    plt.title('Model Comparison: 2 Pulses (Fitted Number)')
     plt.legend()
     plt.grid(True, alpha=0.3)
-    
-    # Right panel: Npulse distribution
-    plt.subplot(1, 2, 2)
-    plt.bar(unique, weighted_counts, color='blue', alpha=0.7, edgecolor='black')
-    plt.axvline(2, color='red', linestyle='--', linewidth=2, label='True Npulse=2')
-    plt.xlabel('Number of Pulses')
-    plt.ylabel('Posterior Probability')
-    plt.title('Pulse Number Distribution')
-    plt.legend()
-    plt.grid(True, alpha=0.3, axis='y')
-    plt.xticks(range(1, max_peaks+1))
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'model_comparison_and_npulse.png'), dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir, 'model_comparison.png'), dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"\nModel comparison plot saved to {output_dir}/model_comparison_and_npulse.png")
+    print(f"\nModel comparison plot saved to {output_dir}/model_comparison.png")
     
-    # Check if the model correctly identified 2 pulses
-    if most_probable_npulse == 2:
-        print("\n✓ SUCCESS: Model correctly identified 2 pulses!")
-    else:
-        print(f"\n⚠ WARNING: Model identified {most_probable_npulse} pulses instead of 2")
+    # Create corner plot
+    print("\nCreating corner plot...")
+    try:
+        # Plot first 5 parameters and Npulse
+        indices = [0, 1, 4, 5, 8, 9, -1]  # A1, A2, tau1, tau2, u1, u2, Npulse
+        fig, axes = nested_samples.plot_2d(indices)
+        fig.savefig(os.path.join(output_dir, 'corner_plot.png'), dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"Corner plot saved to {output_dir}/corner_plot.png")
+    except Exception as e:
+        print(f"Warning: Could not create corner plot: {e}")
+    
+    # Check model selection performance
+    print("\n" + "="*60)
+    print("MODEL SELECTION RESULTS")
+    print("="*60)
+    
+    # Calculate probability of different numbers of pulses
+    npulse_samples = final_state.particles[:, -1]
+    for n in range(1, max_peaks + 1):
+        prob = np.mean((npulse_samples > n - 0.5) & (npulse_samples <= n + 0.5))
+        indicator = " <-- TRUE" if n == 2 else ""
+        print(f"  P(Npulse={n}) = {prob:.3f}{indicator}")
     
     print("\n" + "="*60)
     print("TEST COMPLETED SUCCESSFULLY")
