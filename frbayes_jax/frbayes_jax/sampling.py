@@ -20,7 +20,6 @@ def run_nested_sampling(
     prior_bounds: Optional[Dict] = None,
     max_peaks: int = 2,
     fit_pulses: bool = False,
-    sorted_u: bool = False,
     num_live_points: int = 1000,
     num_delete: int = 50,
     num_inner_steps: int = 20,
@@ -37,7 +36,6 @@ def run_nested_sampling(
         prior_bounds: Prior bounds for parameters (uses defaults if None)
         max_peaks: Maximum number of peaks
         fit_pulses: Whether to fit number of pulses
-        sorted_u: Whether to use sorted priors for arrival times
         num_live_points: Number of live points
         num_delete: Number of points to delete per iteration
         num_inner_steps: Number of MCMC steps between replacements
@@ -53,8 +51,8 @@ def run_nested_sampling(
     data_jax = jnp.array(data)
     t_jax = jnp.array(t)
     
-    # Initialize prior system
-    priors = FRBPriors(model_name, max_peaks, fit_pulses, prior_bounds, sorted_u)
+    # Initialize prior system (always uses sorted priors)
+    priors = FRBPriors(model_name, max_peaks, fit_pulses, prior_bounds)
     ndims = priors.ndims
     
     # Get model function
@@ -99,18 +97,9 @@ def run_nested_sampling(
             high=bounds['tau']['max']
         ))
     
-    # Arrival times - uniform (handled differently if sorted)
-    if not sorted_u:
-        for i in range(max_peaks):
-            dists.append(distrax.Uniform(
-                low=bounds['u']['min'],
-                high=bounds['u']['max']
-            ))
-    else:
-        # For sorted u, we'll handle them specially in logprior_fn
-        # Just append placeholder distributions for now
-        for i in range(max_peaks):
-            dists.append(None)  # Will be handled specially
+    # Arrival times - will be handled specially in logprior_fn for sorting
+    for i in range(max_peaks):
+        dists.append(None)  # Handled specially for sorting constraint
     
     # Widths (for EMG) - uniform
     if 'emg' in model_name:
@@ -142,58 +131,39 @@ def run_nested_sampling(
     
     @jit
     def logprior_fn(theta):
-        if sorted_u and max_peaks > 1:
-            # Need to handle sorted u values specially
-            from .priors import forced_identifiability_transform
-            
-            # Extract indices for different parameter types
-            # Amplitudes: 0 to max_peaks-1
-            # Taus: max_peaks to 2*max_peaks-1
-            # Us: 2*max_peaks to 3*max_peaks-1
-            
-            logp = 0.0
-            
-            # Amplitudes and Taus - regular priors
-            for i in range(2 * max_peaks):
-                if dists[i] is not None:
-                    logp += dists[i].log_prob(theta[i])
-            
-            # Arrival times - need special handling
-            u_start = 2 * max_peaks
-            u_end = 3 * max_peaks
-            u_values = theta[u_start:u_end]
-            
+        # Always handle sorted u values
+        logp = 0.0
+        
+        # Amplitudes and Taus - regular priors
+        for i in range(2 * max_peaks):
+            if dists[i] is not None:
+                logp += dists[i].log_prob(theta[i])
+        
+        # Arrival times - enforce sorting constraint
+        u_start = 2 * max_peaks
+        u_end = 3 * max_peaks
+        u_values = theta[u_start:u_end]
+        
+        if max_peaks > 1:
             # Check if values are sorted
             is_sorted = jnp.all(u_values[:-1] <= u_values[1:])
             
             # If not sorted, return -inf (invalid)
             logp = jnp.where(is_sorted, logp, -jnp.inf)
-            
-            # For sorted values, compute log prior with Jacobian
-            # The Jacobian for the forced identifiability transform
-            # contributes additional terms to the log prior
-            u_min = bounds['u']['min']
-            u_max = bounds['u']['max']
-            
-            # Transform to [0,1] range
-            u_01 = (u_values - u_min) / (u_max - u_min)
-            
-            # Log prior for uniform [0,1] is 0 if in bounds, -inf otherwise
-            in_bounds = jnp.all((u_01 >= 0) & (u_01 <= 1))
-            logp = jnp.where(in_bounds, logp, -jnp.inf)
-            
-            # Add log Jacobian term for the transform
-            # For forced identifiability: log|J| = sum_{i=1}^{n} log(i/(n+1-i)) * log(u_i/u_{i-1})
-            # This is complex, so for now we use uniform prior on sorted values
-            logp += -max_peaks * jnp.log(u_max - u_min)  # Uniform density
-            
-            # Continue with remaining parameters (widths, baseline, sigma, etc.)
-            for i in range(u_end, len(dists)):
-                if dists[i] is not None:
-                    logp += dists[i].log_prob(theta[i])
-        else:
-            # Original behavior - simple sum
-            logp = jnp.sum(jnp.array([dists[i].log_prob(theta[i]) for i in range(len(dists))]))
+        
+        # Check bounds for u values
+        u_min = bounds['u']['min']
+        u_max = bounds['u']['max']
+        in_bounds = jnp.all((u_values >= u_min) & (u_values <= u_max))
+        logp = jnp.where(in_bounds, logp, -jnp.inf)
+        
+        # Uniform prior on sorted values
+        logp += -max_peaks * jnp.log(u_max - u_min)
+        
+        # Continue with remaining parameters (widths, baseline, sigma, etc.)
+        for i in range(u_end, len(dists)):
+            if dists[i] is not None:
+                logp += dists[i].log_prob(theta[i])
         
         return logp
     

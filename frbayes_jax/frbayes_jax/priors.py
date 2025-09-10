@@ -42,13 +42,11 @@ class FRBPriors:
         model_name: str, 
         max_peaks: int, 
         fit_pulses: bool,
-        prior_bounds: Optional[Dict] = None,
-        sorted_u: bool = False
+        prior_bounds: Optional[Dict] = None
     ):
         self.model_name = model_name
         self.max_peaks = max_peaks
         self.fit_pulses = fit_pulses
-        self.sorted_u = sorted_u
         
         # Set default bounds if not provided
         if prior_bounds is None:
@@ -103,8 +101,8 @@ class FRBPriors:
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
             key_idx += 1
         
-        # Arrival times - uniform (with optional sorting)
-        if self.sorted_u and self.max_peaks > 1:
+        # Arrival times - always sorted
+        if self.max_peaks > 1:
             # Sample uniform [0, 1] values
             u_samples_01 = []
             for i in range(self.max_peaks):
@@ -127,14 +125,13 @@ class FRBPriors:
             for i in range(self.max_peaks):
                 samples.append(u_sorted[:, i])
         else:
-            # Original unsorted behavior
-            for i in range(self.max_peaks):
-                dist = distrax.Uniform(
-                    low=self.prior_bounds['u']['min'],
-                    high=self.prior_bounds['u']['max']
-                )
-                samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
-                key_idx += 1
+            # Single peak - no sorting needed
+            dist = distrax.Uniform(
+                low=self.prior_bounds['u']['min'],
+                high=self.prior_bounds['u']['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
         
         # Widths (for EMG) - uniform
         if 'emg' in self.model_name:

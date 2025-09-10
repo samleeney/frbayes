@@ -42,12 +42,11 @@ def test_sorted_prior_sampling():
     """Test that sorted priors produce sorted arrival times."""
     print("\nTesting sorted prior sampling...")
     
-    # Create priors with sorted_u=True
+    # Create priors (always sorted)
     priors = FRBPriors(
         model_name="emg",
         max_peaks=3,
-        fit_pulses=False,
-        sorted_u=True
+        fit_pulses=False
     )
     
     # Sample from prior
@@ -71,26 +70,6 @@ def test_sorted_prior_sampling():
     assert sorted_correctly, "Not all samples have sorted u values!"
     print("  ✓ Sorted priors produce sorted arrival times")
     
-    # Compare with unsorted priors
-    priors_unsorted = FRBPriors(
-        model_name="emg",
-        max_peaks=3,
-        fit_pulses=False,
-        sorted_u=False
-    )
-    
-    key = jax.random.PRNGKey(456)
-    samples_unsorted = priors_unsorted.sample_from_prior(key, n_samples)
-    
-    u1_unsorted = samples_unsorted[:, 6]
-    u2_unsorted = samples_unsorted[:, 7]
-    u3_unsorted = samples_unsorted[:, 8]
-    
-    # Check that unsorted priors don't necessarily produce sorted values
-    unsorted_violations = jnp.sum((u1_unsorted > u2_unsorted) | (u2_unsorted > u3_unsorted))
-    
-    print(f"\n  Unsorted priors: {unsorted_violations}/{n_samples} samples have unsorted u values")
-    print(f"  Example unsorted: u1={u1_unsorted[0]:.3f}, u2={u2_unsorted[0]:.3f}, u3={u3_unsorted[0]:.3f}")
 
 
 def test_parameter_ranges():
@@ -110,8 +89,7 @@ def test_parameter_ranges():
         model_name="emg",
         max_peaks=4,
         fit_pulses=False,
-        prior_bounds=prior_bounds,
-        sorted_u=True
+        prior_bounds=prior_bounds
     )
     
     # Sample from prior
