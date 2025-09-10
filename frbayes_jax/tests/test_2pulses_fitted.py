@@ -107,6 +107,7 @@ def main():
         prior_bounds=prior_bounds,
         max_peaks=max_peaks,
         fit_pulses=fit_pulses,
+        sorted_u=True,  # Use sorted priors for arrival times
         num_live_points=num_live_points,
         num_delete=num_delete,
         num_inner_steps=num_inner_steps,

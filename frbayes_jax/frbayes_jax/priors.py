@@ -7,6 +7,31 @@ import distrax
 from typing import Dict, Optional
 
 
+def forced_identifiability_transform(x: jnp.ndarray) -> jnp.ndarray:
+    """
+    Transform uniform samples to maintain sorted order.
+    Based on the transform from the original frbayes implementation.
+    
+    Args:
+        x: Array of uniform samples in [0, 1]
+    
+    Returns:
+        Transformed samples that maintain ordering
+    """
+    N = len(x)
+    t = jnp.zeros_like(x)
+    
+    # Use JAX's functional approach for the transform
+    # Start from the last element
+    t = t.at[N-1].set(x[N-1]**(1./N))
+    
+    # Work backwards using a scan or explicit loop
+    for n in range(N-2, -1, -1):
+        t = t.at[n].set(x[n]**(1./(n+1)) * t[n+1])
+    
+    return t
+
+
 class FRBPriors:
     """
     Simple prior system using distrax distributions.
@@ -17,11 +42,13 @@ class FRBPriors:
         model_name: str, 
         max_peaks: int, 
         fit_pulses: bool,
-        prior_bounds: Optional[Dict] = None
+        prior_bounds: Optional[Dict] = None,
+        sorted_u: bool = False
     ):
         self.model_name = model_name
         self.max_peaks = max_peaks
         self.fit_pulses = fit_pulses
+        self.sorted_u = sorted_u
         
         # Set default bounds if not provided
         if prior_bounds is None:
@@ -76,14 +103,38 @@ class FRBPriors:
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
             key_idx += 1
         
-        # Arrival times - uniform
-        for i in range(self.max_peaks):
-            dist = distrax.Uniform(
-                low=self.prior_bounds['u']['min'],
-                high=self.prior_bounds['u']['max']
-            )
-            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
-            key_idx += 1
+        # Arrival times - uniform (with optional sorting)
+        if self.sorted_u and self.max_peaks > 1:
+            # Sample uniform [0, 1] values
+            u_samples_01 = []
+            for i in range(self.max_peaks):
+                dist = distrax.Uniform(low=0.0, high=1.0)
+                u_samples_01.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+                key_idx += 1
+            
+            # Stack and apply transform to each sample
+            u_01_stacked = jnp.stack(u_samples_01, axis=-1)  # Shape: (n_samples, max_peaks)
+            
+            # Apply transform to each sample using vmap
+            u_sorted_01 = jax.vmap(forced_identifiability_transform)(u_01_stacked)
+            
+            # Rescale to [u_min, u_max]
+            u_min = self.prior_bounds['u']['min']
+            u_max = self.prior_bounds['u']['max']
+            u_sorted = u_min + (u_max - u_min) * u_sorted_01
+            
+            # Split back into individual samples for consistency with rest of code
+            for i in range(self.max_peaks):
+                samples.append(u_sorted[:, i])
+        else:
+            # Original unsorted behavior
+            for i in range(self.max_peaks):
+                dist = distrax.Uniform(
+                    low=self.prior_bounds['u']['min'],
+                    high=self.prior_bounds['u']['max']
+                )
+                samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+                key_idx += 1
         
         # Widths (for EMG) - uniform
         if 'emg' in self.model_name:
