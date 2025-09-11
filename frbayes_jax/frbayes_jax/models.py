@@ -55,10 +55,9 @@ def exponential_pulse(t: jnp.ndarray, A: float, tau: float, u: float) -> jnp.nda
     Returns:
         Exponential pulse evaluated at time t
     """
-    # Use a smooth sigmoid transition instead of sharp cutoff
-    # This maintains differentiability for the sampler
-    transition = jax.nn.sigmoid(10.0 * (t - u))
-    return A * transition * jnp.exp(-(t - u) / tau)
+    # Pure exponential with sharp cutoff at arrival time
+    # Using jnp.where for a true step function
+    return jnp.where(t >= u, A * jnp.exp(-(t - u) / tau), 0.0)
 
 
 def emg_model(t: jnp.ndarray, theta: jnp.ndarray, max_peaks: int, fit_pulses: bool) -> jnp.ndarray:
