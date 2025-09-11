@@ -198,9 +198,23 @@ def run_nested_sampling(
             high=bounds['tau']['max']
         ))
     
-    # Arrival times - will be handled specially in logprior_fn for sorting
-    for i in range(max_peaks):
-        dists.append(None)  # Handled specially for sorting constraint
+    # Arrival times/location parameters
+    if 'periodic' in model_name:
+        # u0 - first pulse location
+        u0_bounds = bounds.get('u0', bounds.get('u', {'min': 0.0, 'max': 4.0}))
+        dists.append(distrax.Uniform(
+            low=u0_bounds['min'],
+            high=u0_bounds['max']
+        ))
+        # period - spacing between pulses
+        dists.append(distrax.Uniform(
+            low=bounds['period']['min'],
+            high=bounds['period']['max']
+        ))
+    else:
+        # Regular models - will be handled specially in logprior_fn for sorting
+        for i in range(max_peaks):
+            dists.append(None)  # Handled specially for sorting constraint
     
     # Widths (for EMG) - uniform
     if 'emg' in model_name:
@@ -232,7 +246,6 @@ def run_nested_sampling(
     
     @jit
     def logprior_fn(theta):
-        # Always handle sorted u values
         logp = 0.0
         
         # Amplitudes and Taus - regular priors
@@ -240,29 +253,45 @@ def run_nested_sampling(
             if dists[i] is not None:
                 logp += dists[i].log_prob(theta[i])
         
-        # Arrival times - enforce sorting constraint
-        u_start = 2 * max_peaks
-        u_end = 3 * max_peaks
-        u_values = theta[u_start:u_end]
-        
-        if max_peaks > 1:
-            # Check if values are sorted
-            is_sorted = jnp.all(u_values[:-1] <= u_values[1:])
+        if 'periodic' in model_name:
+            # For periodic models: u0 and period have simple uniform priors
+            u0_idx = 2 * max_peaks
+            period_idx = 2 * max_peaks + 1
             
-            # If not sorted, return -inf (invalid)
-            logp = jnp.where(is_sorted, logp, -jnp.inf)
-        
-        # Check bounds for u values
-        u_min = bounds['u']['min']
-        u_max = bounds['u']['max']
-        in_bounds = jnp.all((u_values >= u_min) & (u_values <= u_max))
-        logp = jnp.where(in_bounds, logp, -jnp.inf)
-        
-        # Uniform prior on sorted values
-        logp += -max_peaks * jnp.log(u_max - u_min)
+            # u0 and period priors
+            if dists[u0_idx] is not None:
+                logp += dists[u0_idx].log_prob(theta[u0_idx])
+            if dists[period_idx] is not None:
+                logp += dists[period_idx].log_prob(theta[period_idx])
+            
+            # Continue with remaining parameters
+            start_idx = 2 * max_peaks + 2
+        else:
+            # Non-periodic: Arrival times - enforce sorting constraint
+            u_start = 2 * max_peaks
+            u_end = 3 * max_peaks
+            u_values = theta[u_start:u_end]
+            
+            if max_peaks > 1:
+                # Check if values are sorted
+                is_sorted = jnp.all(u_values[:-1] <= u_values[1:])
+                
+                # If not sorted, return -inf (invalid)
+                logp = jnp.where(is_sorted, logp, -jnp.inf)
+            
+            # Check bounds for u values
+            u_min = bounds['u']['min']
+            u_max = bounds['u']['max']
+            in_bounds = jnp.all((u_values >= u_min) & (u_values <= u_max))
+            logp = jnp.where(in_bounds, logp, -jnp.inf)
+            
+            # Uniform prior on sorted values
+            logp += -max_peaks * jnp.log(u_max - u_min)
+            
+            start_idx = u_end
         
         # Continue with remaining parameters (widths, baseline, sigma, etc.)
-        for i in range(u_end, len(dists)):
+        for i in range(start_idx, len(dists)):
             if dists[i] is not None:
                 logp += dists[i].log_prob(theta[i])
         

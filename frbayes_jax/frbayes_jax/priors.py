@@ -69,6 +69,10 @@ class FRBPriors:
             self.ndims = 4 * max_peaks + 2  # A, tau, u, w for each peak + baseline + sigma
         elif self.model_name == "exponential_with_baseline":
             self.ndims = 3 * max_peaks + 2  # A, tau, u for each peak + baseline + sigma
+        elif self.model_name == "periodic_exponential":
+            self.ndims = 2 * max_peaks + 3  # A, tau for each peak + u0 + period + sigma
+        elif self.model_name == "periodic_exponential_with_baseline":
+            self.ndims = 2 * max_peaks + 4  # A, tau for each peak + u0 + period + baseline + sigma
         else:
             raise ValueError(f"Model {self.model_name} not recognized")
         
@@ -101,37 +105,57 @@ class FRBPriors:
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
             key_idx += 1
         
-        # Arrival times - always sorted
-        if self.max_peaks > 1:
-            # Sample uniform [0, 1] values
-            u_samples_01 = []
-            for i in range(self.max_peaks):
-                dist = distrax.Uniform(low=0.0, high=1.0)
-                u_samples_01.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
-                key_idx += 1
-            
-            # Stack and apply transform to each sample
-            u_01_stacked = jnp.stack(u_samples_01, axis=-1)  # Shape: (n_samples, max_peaks)
-            
-            # Apply transform to each sample using vmap
-            u_sorted_01 = jax.vmap(forced_identifiability_transform)(u_01_stacked)
-            
-            # Rescale to [u_min, u_max]
-            u_min = self.prior_bounds['u']['min']
-            u_max = self.prior_bounds['u']['max']
-            u_sorted = u_min + (u_max - u_min) * u_sorted_01
-            
-            # Split back into individual samples for consistency with rest of code
-            for i in range(self.max_peaks):
-                samples.append(u_sorted[:, i])
-        else:
-            # Single peak - no sorting needed
+        # Arrival times/location parameters
+        if 'periodic' in self.model_name:
+            # For periodic models: u0 and period
+            # u0 - first pulse location
+            u0_bounds = self.prior_bounds.get('u0', self.prior_bounds.get('u', {'min': -5.0, 'max': 10.0}))
             dist = distrax.Uniform(
-                low=self.prior_bounds['u']['min'],
-                high=self.prior_bounds['u']['max']
+                low=u0_bounds['min'],
+                high=u0_bounds['max']
             )
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
             key_idx += 1
+            
+            # period - spacing between pulses
+            dist = distrax.Uniform(
+                low=self.prior_bounds['period']['min'],
+                high=self.prior_bounds['period']['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+        else:
+            # Non-periodic models: individual arrival times (sorted)
+            if self.max_peaks > 1:
+                # Sample uniform [0, 1] values
+                u_samples_01 = []
+                for i in range(self.max_peaks):
+                    dist = distrax.Uniform(low=0.0, high=1.0)
+                    u_samples_01.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+                    key_idx += 1
+                
+                # Stack and apply transform to each sample
+                u_01_stacked = jnp.stack(u_samples_01, axis=-1)  # Shape: (n_samples, max_peaks)
+                
+                # Apply transform to each sample using vmap
+                u_sorted_01 = jax.vmap(forced_identifiability_transform)(u_01_stacked)
+                
+                # Rescale to [u_min, u_max]
+                u_min = self.prior_bounds['u']['min']
+                u_max = self.prior_bounds['u']['max']
+                u_sorted = u_min + (u_max - u_min) * u_sorted_01
+                
+                # Split back into individual samples for consistency with rest of code
+                for i in range(self.max_peaks):
+                    samples.append(u_sorted[:, i])
+            else:
+                # Single peak - no sorting needed
+                dist = distrax.Uniform(
+                    low=self.prior_bounds['u']['min'],
+                    high=self.prior_bounds['u']['max']
+                )
+                samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+                key_idx += 1
         
         # Widths (for EMG) - uniform
         if 'emg' in self.model_name:
