@@ -57,6 +57,8 @@ Thumbs.db
 plots/
 results/
 chains/
+results_*/
+**/results_*/
 
 # Data files
 *.h5
@@ -69,6 +71,7 @@ docs/_build/
 # Archive folders
 .archive/
 */.archive/
+archive/
 
 # Image files
 *.png
