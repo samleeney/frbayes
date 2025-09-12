@@ -42,11 +42,13 @@ class FRBPriors:
         model_name: str, 
         max_peaks: int, 
         fit_pulses: bool,
-        prior_bounds: Optional[Dict] = None
+        prior_bounds: Optional[Dict] = None,
+        use_rfi_mitigation: bool = False
     ):
         self.model_name = model_name
         self.max_peaks = max_peaks
         self.fit_pulses = fit_pulses
+        self.use_rfi_mitigation = use_rfi_mitigation
         
         # Set default bounds if not provided
         if prior_bounds is None:
@@ -87,6 +89,9 @@ class FRBPriors:
             raise ValueError(f"Model {self.model_name} not recognized")
         
         if fit_pulses:
+            self.ndims += 1
+        
+        if use_rfi_mitigation:
             self.ndims += 1
     
     def sample_from_prior(self, rng_key: jax.random.PRNGKey, n_samples: int = 1) -> jnp.ndarray:
@@ -207,6 +212,16 @@ class FRBPriors:
         # Npulse (if fitted) - uniform integer
         if self.fit_pulses:
             dist = distrax.Uniform(low=1.0, high=float(self.max_peaks))
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+        
+        # Anomaly probability (if using RFI mitigation) - log-uniform
+        if self.use_rfi_mitigation:
+            log_p_bounds = self.prior_bounds.get('log_anomaly_prob', {'min': -10.0, 'max': -0.1})
+            dist = distrax.Uniform(
+                low=log_p_bounds['min'],
+                high=log_p_bounds['max']
+            )
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
         
         return jnp.stack(samples, axis=-1)

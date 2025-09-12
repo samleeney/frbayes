@@ -403,7 +403,8 @@ def run_nested_sampling_2d(
     num_inner_steps: int = 20,
     log_tolerance: float = -3.0,
     seed: int = 0,
-    ref_freq: float = 1400.0
+    ref_freq: float = 1400.0,
+    use_rfi_mitigation: bool = False
 ):
     """
     Run nested sampling for 2D models with spectral index.
@@ -423,6 +424,7 @@ def run_nested_sampling_2d(
         log_tolerance: Termination criterion (log(Z_live/Z))
         seed: Random seed
         ref_freq: Reference frequency in MHz for spectral scaling
+        use_rfi_mitigation: If True, uses Bayesian anomaly detection for RFI mitigation
     
     Returns:
         Dictionary containing sampling results
@@ -444,7 +446,7 @@ def run_nested_sampling_2d(
     
     # Initialize prior system with spectral index
     from .priors import FRBPriors
-    priors = FRBPriors(model_name, max_peaks, fit_pulses, prior_bounds)
+    priors = FRBPriors(model_name, max_peaks, fit_pulses, prior_bounds, use_rfi_mitigation)
     ndims = priors.ndims
     
     # Get model function and parameter indices
@@ -453,31 +455,77 @@ def run_nested_sampling_2d(
     alpha_idx = get_spectral_index_location(model_name, max_peaks)
     
     # Create log-likelihood function for 2D data
-    def loglikelihood_fn(theta):
-        # Get 2D model prediction
-        model_2d = model_func(t_jax, freq_jax, theta, max_peaks, fit_pulses, ref_freq)
+    if use_rfi_mitigation:
+        # Calculate delta for anomaly detection (max intensity in the data)
+        delta = jnp.max(jnp.abs(data_2d_jax))
         
-        # Get sigma (assumes single sigma for all channels for now)
-        sigma = theta[sigma_idx]
-        
-        # Calculate residuals
-        residuals = data_2d_jax - model_2d
-        
-        # If we have per-channel noise, use it for weighting
-        if noise_per_channel is not None and len(noise_jax.shape) > 0:
-            # Weight by per-channel noise
-            weighted_residuals = residuals / noise_jax[:, None]
-            log_likelihood = -0.5 * jnp.sum(weighted_residuals**2)
-            # Add normalization terms
-            log_likelihood -= jnp.sum(jnp.log(noise_jax)) * len(t_jax)
-            log_likelihood -= len(data_2d_jax.flatten()) * jnp.log(jnp.sqrt(2 * jnp.pi))
-        else:
-            # Use single sigma for all points
-            log_likelihood = -0.5 * jnp.sum((residuals / sigma) ** 2)
-            n_total = data_2d_jax.size
-            log_likelihood -= n_total * jnp.log(sigma * jnp.sqrt(2 * jnp.pi))
-        
-        return log_likelihood
+        def loglikelihood_fn(theta):
+            # Get 2D model prediction (exclude anomaly probability from model params)
+            if use_rfi_mitigation:
+                model_params = theta[:-1]  # All params except log_p
+                log_p = theta[-1]  # Log anomaly probability
+                p = jnp.exp(log_p)  # Anomaly probability
+            else:
+                model_params = theta
+            
+            model_2d = model_func(t_jax, freq_jax, model_params, max_peaks, fit_pulses, ref_freq)
+            
+            # Get sigma
+            sigma = model_params[sigma_idx]
+            
+            # Calculate residuals
+            residuals = data_2d_jax - model_2d
+            
+            # Calculate normal log-likelihood for each point
+            if noise_per_channel is not None and len(noise_jax.shape) > 0:
+                # Weight by per-channel noise
+                weighted_residuals = residuals / noise_jax[:, None]
+                log_likelihood_normal = -0.5 * weighted_residuals**2
+                # Add normalization
+                log_likelihood_normal -= jnp.log(noise_jax[:, None] * jnp.sqrt(2 * jnp.pi))
+            else:
+                # Use single sigma for all points
+                log_likelihood_normal = -0.5 * (residuals / sigma) ** 2
+                log_likelihood_normal -= jnp.log(sigma * jnp.sqrt(2 * jnp.pi))
+            
+            # Apply anomaly correction (Bayesian anomaly detection)
+            # Normal likelihood with prior probability (1-p)
+            log_likelihood_with_prior = log_likelihood_normal + jnp.log(1 - p)
+            
+            # Anomaly threshold: uniform likelihood over [-delta, delta] with probability p
+            anomaly_threshold = log_p - jnp.log(2 * delta)
+            
+            # Take maximum of normal and anomaly likelihoods
+            log_likelihood_corrected = jnp.maximum(log_likelihood_with_prior, anomaly_threshold)
+            
+            # Sum over all points
+            return jnp.sum(log_likelihood_corrected)
+    else:
+        def loglikelihood_fn(theta):
+            # Get 2D model prediction
+            model_2d = model_func(t_jax, freq_jax, theta, max_peaks, fit_pulses, ref_freq)
+            
+            # Get sigma (assumes single sigma for all channels for now)
+            sigma = theta[sigma_idx]
+            
+            # Calculate residuals
+            residuals = data_2d_jax - model_2d
+            
+            # If we have per-channel noise, use it for weighting
+            if noise_per_channel is not None and len(noise_jax.shape) > 0:
+                # Weight by per-channel noise
+                weighted_residuals = residuals / noise_jax[:, None]
+                log_likelihood = -0.5 * jnp.sum(weighted_residuals**2)
+                # Add normalization terms
+                log_likelihood -= jnp.sum(jnp.log(noise_jax)) * len(t_jax)
+                log_likelihood -= len(data_2d_jax.flatten()) * jnp.log(jnp.sqrt(2 * jnp.pi))
+            else:
+                # Use single sigma for all points
+                log_likelihood = -0.5 * jnp.sum((residuals / sigma) ** 2)
+                n_total = data_2d_jax.size
+                log_likelihood -= n_total * jnp.log(sigma * jnp.sqrt(2 * jnp.pi))
+            
+            return log_likelihood
     
     # Create prior log-probability function
     import distrax
@@ -537,6 +585,15 @@ def run_nested_sampling_2d(
         dists.append(distrax.Uniform(
             low=1.0,
             high=float(max_peaks)
+        ))
+    
+    # Anomaly probability (if using RFI mitigation) - log-uniform
+    if use_rfi_mitigation:
+        # log(p) uniform from -10 to -0.1 (p from ~0.00005 to ~0.9)
+        log_p_bounds = bounds.get('log_anomaly_prob', {'min': -10.0, 'max': -0.1})
+        dists.append(distrax.Uniform(
+            low=log_p_bounds['min'],
+            high=log_p_bounds['max']
         ))
     
     @jit
