@@ -8,7 +8,7 @@ import blackjax
 import numpy as np
 from typing import Dict, Tuple, Optional, Callable
 import tqdm
-from .models import get_model_function, get_num_params, get_sigma_index, get_param_names
+from .models import get_model_function, get_num_params, get_sigma_index, get_param_names, get_spectral_index_location
 from .priors import FRBPriors
 from blackjax.ns.base import NSInfo
 
@@ -384,6 +384,262 @@ def run_nested_sampling(
         max_valid = np.nanmax(logL_birth)
         logL_birth[nan_mask] = max_valid
         # Replace in the final_state
+        final_state = final_state._replace(loglikelihood_birth=logL_birth)
+    
+    return final_state
+
+
+def run_nested_sampling_2d(
+    model_name: str,
+    data_2d: np.ndarray,
+    t: np.ndarray,
+    freq: np.ndarray,
+    noise_per_channel: Optional[np.ndarray] = None,
+    prior_bounds: Optional[Dict] = None,
+    max_peaks: int = 2,
+    fit_pulses: bool = False,
+    num_live_points: int = 1000,
+    num_delete: int = 50,
+    num_inner_steps: int = 20,
+    log_tolerance: float = -3.0,
+    seed: int = 0,
+    ref_freq: float = 1400.0
+):
+    """
+    Run nested sampling for 2D models with spectral index.
+    
+    Args:
+        model_name: Name of the 2D model to use (e.g., "emg_2d", "exponential_2d")
+        data_2d: 2D waterfall data (freq, time)
+        t: Time axis
+        freq: Frequency axis (MHz)
+        noise_per_channel: Per-channel noise estimates (if None, uses single sigma)
+        prior_bounds: Prior bounds for parameters (uses defaults if None)
+        max_peaks: Maximum number of peaks
+        fit_pulses: Whether to fit number of pulses
+        num_live_points: Number of live points
+        num_delete: Number of points to delete per iteration
+        num_inner_steps: Number of MCMC steps between replacements
+        log_tolerance: Termination criterion (log(Z_live/Z))
+        seed: Random seed
+        ref_freq: Reference frequency in MHz for spectral scaling
+    
+    Returns:
+        Dictionary containing sampling results
+    """
+    # Ensure we have a 2D model
+    if "2d" not in model_name:
+        raise ValueError(f"Model {model_name} is not a 2D model. Use models ending with '_2d'")
+    
+    # Convert data to JAX arrays
+    data_2d_jax = jnp.array(data_2d)
+    t_jax = jnp.array(t)
+    freq_jax = jnp.array(freq)
+    
+    if noise_per_channel is not None:
+        noise_jax = jnp.array(noise_per_channel)
+    else:
+        # Estimate single noise value from data
+        noise_jax = jnp.std(data_2d_jax)
+    
+    # Initialize prior system with spectral index
+    from .priors import FRBPriors
+    priors = FRBPriors(model_name, max_peaks, fit_pulses, prior_bounds)
+    ndims = priors.ndims
+    
+    # Get model function and parameter indices
+    model_func = get_model_function(model_name)
+    sigma_idx = get_sigma_index(model_name, max_peaks, fit_pulses)
+    alpha_idx = get_spectral_index_location(model_name, max_peaks)
+    
+    # Create log-likelihood function for 2D data
+    def loglikelihood_fn(theta):
+        # Get 2D model prediction
+        model_2d = model_func(t_jax, freq_jax, theta, max_peaks, fit_pulses, ref_freq)
+        
+        # Get sigma (assumes single sigma for all channels for now)
+        sigma = theta[sigma_idx]
+        
+        # Calculate residuals
+        residuals = data_2d_jax - model_2d
+        
+        # If we have per-channel noise, use it for weighting
+        if noise_per_channel is not None and len(noise_jax.shape) > 0:
+            # Weight by per-channel noise
+            weighted_residuals = residuals / noise_jax[:, None]
+            log_likelihood = -0.5 * jnp.sum(weighted_residuals**2)
+            # Add normalization terms
+            log_likelihood -= jnp.sum(jnp.log(noise_jax)) * len(t_jax)
+            log_likelihood -= len(data_2d_jax.flatten()) * jnp.log(jnp.sqrt(2 * jnp.pi))
+        else:
+            # Use single sigma for all points
+            log_likelihood = -0.5 * jnp.sum((residuals / sigma) ** 2)
+            n_total = data_2d_jax.size
+            log_likelihood -= n_total * jnp.log(sigma * jnp.sqrt(2 * jnp.pi))
+        
+        return log_likelihood
+    
+    # Create prior log-probability function
+    import distrax
+    bounds = priors.prior_bounds
+    
+    # Build list of distributions including spectral index
+    dists = []
+    
+    # Amplitudes - uniform
+    for i in range(max_peaks):
+        dists.append(distrax.Uniform(
+            low=bounds['amplitude']['min'],
+            high=bounds['amplitude']['max']
+        ))
+    
+    # Taus - uniform  
+    for i in range(max_peaks):
+        dists.append(distrax.Uniform(
+            low=bounds['tau']['min'],
+            high=bounds['tau']['max']
+        ))
+    
+    # Arrival times - handled specially for sorting
+    for i in range(max_peaks):
+        dists.append(None)  # Handled in logprior_fn
+    
+    # Widths (for EMG) - uniform
+    if 'emg' in model_name:
+        for i in range(max_peaks):
+            dists.append(distrax.Uniform(
+                low=bounds['width']['min'],
+                high=bounds['width']['max']
+            ))
+    
+    # Baseline (if applicable) - uniform
+    if 'baseline' in model_name:
+        dists.append(distrax.Uniform(
+            low=bounds.get('baseline', {'min': -1.0, 'max': 1.0})['min'],
+            high=bounds.get('baseline', {'min': -1.0, 'max': 1.0})['max']
+        ))
+    
+    # Spectral index - uniform (typical range)
+    alpha_bounds = bounds.get('spectral_index', {'min': -3.0, 'max': 1.0})
+    dists.append(distrax.Uniform(
+        low=alpha_bounds['min'],
+        high=alpha_bounds['max']
+    ))
+    
+    # Sigma - uniform
+    dists.append(distrax.Uniform(
+        low=jnp.exp(bounds['log_sigma']['min']),
+        high=jnp.exp(bounds['log_sigma']['max'])
+    ))
+    
+    # Npulse (if fitted) - uniform over integer range
+    if fit_pulses:
+        dists.append(distrax.Uniform(
+            low=1.0,
+            high=float(max_peaks)
+        ))
+    
+    @jit
+    def logprior_fn(theta):
+        logp = 0.0
+        
+        # Amplitudes and Taus - regular priors
+        for i in range(2 * max_peaks):
+            if dists[i] is not None:
+                logp += dists[i].log_prob(theta[i])
+        
+        # Arrival times - enforce sorting constraint
+        u_start = 2 * max_peaks
+        u_end = 3 * max_peaks if 'exponential' in model_name else u_start + max_peaks
+        u_values = theta[u_start:u_end]
+        
+        if max_peaks > 1:
+            # Check if values are sorted
+            is_sorted = jnp.all(u_values[:-1] <= u_values[1:])
+            # If not sorted, return -inf (invalid)
+            logp = jnp.where(is_sorted, logp, -jnp.inf)
+        
+        # Check bounds for u values
+        u_min = bounds['u']['min']
+        u_max = bounds['u']['max']
+        in_bounds = jnp.all((u_values >= u_min) & (u_values <= u_max))
+        logp = jnp.where(in_bounds, logp, -jnp.inf)
+        
+        # Uniform prior on sorted values
+        logp += -max_peaks * jnp.log(u_max - u_min)
+        
+        # Continue with remaining parameters
+        start_idx = 3 * max_peaks if 'exponential' in model_name else 4 * max_peaks
+        for i in range(start_idx, len(dists)):
+            if dists[i] is not None:
+                logp += dists[i].log_prob(theta[i])
+        
+        return logp
+    
+    # Initialize nested sampling algorithm
+    algo = blackjax.nss(
+        logprior_fn=logprior_fn,
+        loglikelihood_fn=loglikelihood_fn,
+        num_delete=num_delete,
+        num_inner_steps=num_inner_steps,
+    )
+    
+    # Initialize random key
+    rng_key = jax.random.PRNGKey(seed)
+    
+    # Sample initial points from the prior
+    rng_key, init_key = jax.random.split(rng_key)
+    initial_live_points = priors.sample_from_prior(init_key, num_live_points)
+    
+    # Initialize state
+    state = algo.init(initial_live_points)
+    
+    # JIT-compile the step function
+    @jit
+    def one_step(carry, xs):
+        state, k = carry
+        k, subk = jax.random.split(k, 2)
+        state, dead_point = algo.step(subk, state)
+        return (state, k), dead_point
+    
+    # Run nested sampling until convergence
+    dead = []
+    pbar = tqdm.tqdm(desc="Dead points (2D)", unit=" dead points")
+    
+    iteration = 0
+    while state.logZ_live - state.logZ >= log_tolerance:
+        # Take a step
+        (state, rng_key), dead_info = one_step((state, rng_key), None)
+        dead.append(dead_info)
+        pbar.update(num_delete)
+        
+        iteration += 1
+        
+        # Update progress bar every 100 iterations
+        if iteration % 100 == 0:
+            pbar.set_postfix({"logZ": f"{state.logZ:.2f}", "logZ_live": f"{state.logZ_live:.2f}"})
+    
+    pbar.close()
+    
+    print("\n" + "="*60)
+    print("2D SAMPLING COMPLETED - Starting post-processing")
+    print("="*60)
+    
+    # Clear memory and finalise
+    import gc
+    gc.collect()
+    jax.clear_caches()
+    
+    # Use chunked finalise
+    chunk_size = max(1, len(dead) // 10)
+    final_state = finalise_chunked(state, dead, chunk_size=chunk_size)
+    
+    # Fix NaN birth likelihoods
+    logL_birth = np.array(final_state.loglikelihood_birth)
+    nan_mask = np.isnan(logL_birth)
+    if np.any(nan_mask):
+        max_valid = np.nanmax(logL_birth)
+        logL_birth[nan_mask] = max_valid
         final_state = final_state._replace(loglikelihood_birth=logL_birth)
     
     return final_state

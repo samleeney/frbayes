@@ -283,6 +283,168 @@ def periodic_exponential_model_with_baseline(t: jnp.ndarray, theta: jnp.ndarray,
     return model + baseline_offset
 
 
+def emg_model_2d(t: jnp.ndarray, freq: jnp.ndarray, theta: jnp.ndarray, max_peaks: int, fit_pulses: bool, ref_freq: float = 1400.0) -> jnp.ndarray:
+    """
+    2D EMG model with spectral index for dedispersed data.
+    
+    Args:
+        t: Time array
+        freq: Frequency array (MHz)
+        theta: Parameter array [A1,...,An, tau1,...,taun, u1,...,un, w1,...,wn, alpha, sigma, (Npulse)]
+               where alpha is the spectral index
+        max_peaks: Maximum number of peaks
+        fit_pulses: Whether Npulse is included in theta
+        ref_freq: Reference frequency in MHz
+    
+    Returns:
+        2D model prediction (freq, time)
+    """
+    # Get spectral index location
+    alpha_idx = 4 * max_peaks
+    alpha = theta[alpha_idx]
+    
+    # Create theta without spectral index for base model
+    theta_base = jnp.concatenate([
+        theta[:alpha_idx],  # All params before alpha
+        theta[alpha_idx+1:]  # sigma and potentially Npulse
+    ])
+    
+    # Get base temporal model (1D)
+    base_model = emg_model(t, theta_base, max_peaks, fit_pulses)
+    
+    # Apply frequency scaling using vmap
+    def scale_by_freq(f):
+        return base_model * (f / ref_freq) ** alpha
+    
+    # Vectorize over frequency
+    model_2d = vmap(scale_by_freq)(freq)
+    
+    return model_2d
+
+
+def exponential_model_2d(t: jnp.ndarray, freq: jnp.ndarray, theta: jnp.ndarray, max_peaks: int, fit_pulses: bool, ref_freq: float = 1400.0) -> jnp.ndarray:
+    """
+    2D exponential model with spectral index for dedispersed data.
+    
+    Args:
+        t: Time array
+        freq: Frequency array (MHz)
+        theta: Parameter array [A1,...,An, tau1,...,taun, u1,...,un, alpha, sigma, (Npulse)]
+               where alpha is the spectral index
+        max_peaks: Maximum number of peaks
+        fit_pulses: Whether Npulse is included in theta
+        ref_freq: Reference frequency in MHz
+    
+    Returns:
+        2D model prediction (freq, time)
+    """
+    # Get spectral index location
+    alpha_idx = 3 * max_peaks
+    alpha = theta[alpha_idx]
+    
+    # Create theta without spectral index for base model
+    theta_base = jnp.concatenate([
+        theta[:alpha_idx],  # All params before alpha
+        theta[alpha_idx+1:]  # sigma and potentially Npulse
+    ])
+    
+    # Get base temporal model (1D)
+    base_model = exponential_model(t, theta_base, max_peaks, fit_pulses)
+    
+    # Apply frequency scaling using vmap
+    def scale_by_freq(f):
+        return base_model * (f / ref_freq) ** alpha
+    
+    # Vectorize over frequency
+    model_2d = vmap(scale_by_freq)(freq)
+    
+    return model_2d
+
+
+def emg_model_2d_with_baseline(t: jnp.ndarray, freq: jnp.ndarray, theta: jnp.ndarray, max_peaks: int, fit_pulses: bool, ref_freq: float = 1400.0) -> jnp.ndarray:
+    """
+    2D EMG model with spectral index and baseline for dedispersed data.
+    
+    Args:
+        t: Time array
+        freq: Frequency array (MHz)
+        theta: Parameter array [A1,...,An, tau1,...,taun, u1,...,un, w1,...,wn, B_offset, alpha, sigma, (Npulse)]
+        max_peaks: Maximum number of peaks
+        fit_pulses: Whether Npulse is included in theta
+        ref_freq: Reference frequency in MHz
+    
+    Returns:
+        2D model prediction (freq, time)
+    """
+    # Get spectral index location (after baseline)
+    alpha_idx = 4 * max_peaks + 1
+    alpha = theta[alpha_idx]
+    
+    # Create theta without spectral index for base model
+    theta_base = jnp.concatenate([
+        theta[:alpha_idx],  # All params before alpha including baseline
+        theta[alpha_idx+1:]  # sigma and potentially Npulse
+    ])
+    
+    # Get base temporal model with baseline (1D)
+    base_model = emg_model_with_baseline(t, theta_base, max_peaks, fit_pulses)
+    
+    # Extract baseline separately to avoid scaling it
+    baseline = theta[4 * max_peaks]
+    base_model_no_baseline = base_model - baseline
+    
+    # Apply frequency scaling to pulse component only
+    def scale_by_freq(f):
+        return base_model_no_baseline * (f / ref_freq) ** alpha + baseline
+    
+    # Vectorize over frequency
+    model_2d = vmap(scale_by_freq)(freq)
+    
+    return model_2d
+
+
+def exponential_model_2d_with_baseline(t: jnp.ndarray, freq: jnp.ndarray, theta: jnp.ndarray, max_peaks: int, fit_pulses: bool, ref_freq: float = 1400.0) -> jnp.ndarray:
+    """
+    2D exponential model with spectral index and baseline for dedispersed data.
+    
+    Args:
+        t: Time array
+        freq: Frequency array (MHz)
+        theta: Parameter array [A1,...,An, tau1,...,taun, u1,...,un, B_offset, alpha, sigma, (Npulse)]
+        max_peaks: Maximum number of peaks
+        fit_pulses: Whether Npulse is included in theta
+        ref_freq: Reference frequency in MHz
+    
+    Returns:
+        2D model prediction (freq, time)
+    """
+    # Get spectral index location (after baseline)
+    alpha_idx = 3 * max_peaks + 1
+    alpha = theta[alpha_idx]
+    
+    # Create theta without spectral index for base model
+    theta_base = jnp.concatenate([
+        theta[:alpha_idx],  # All params before alpha including baseline
+        theta[alpha_idx+1:]  # sigma and potentially Npulse
+    ])
+    
+    # Get base temporal model with baseline (1D)
+    base_model = exponential_model_with_baseline(t, theta_base, max_peaks, fit_pulses)
+    
+    # Extract baseline separately to avoid scaling it
+    baseline = theta[3 * max_peaks]
+    base_model_no_baseline = base_model - baseline
+    
+    # Apply frequency scaling to pulse component only
+    def scale_by_freq(f):
+        return base_model_no_baseline * (f / ref_freq) ** alpha + baseline
+    
+    # Vectorize over frequency
+    model_2d = vmap(scale_by_freq)(freq)
+    
+    return model_2d
+
+
 def get_model_function(model_name: str) -> Callable:
     """
     Get the model function for a given model name.
@@ -299,7 +461,12 @@ def get_model_function(model_name: str) -> Callable:
         "emg_with_baseline": emg_model_with_baseline,
         "exponential_with_baseline": exponential_model_with_baseline,
         "periodic_exponential": periodic_exponential_model,
-        "periodic_exponential_with_baseline": periodic_exponential_model_with_baseline
+        "periodic_exponential_with_baseline": periodic_exponential_model_with_baseline,
+        # 2D models
+        "emg_2d": emg_model_2d,
+        "exponential_2d": exponential_model_2d,
+        "emg_2d_with_baseline": emg_model_2d_with_baseline,
+        "exponential_2d_with_baseline": exponential_model_2d_with_baseline
     }
     
     if model_name not in models:
@@ -338,6 +505,19 @@ def get_num_params(model_name: str, max_peaks: int, fit_pulses: bool) -> int:
     elif model_name == "periodic_exponential_with_baseline":
         # A, tau for each peak + u0 + period + baseline + sigma + (optionally) Npulse
         ndims = 2 * max_peaks + 4
+    # 2D models with spectral index
+    elif model_name == "emg_2d":
+        # A, tau, u, w for each peak + alpha + sigma + (optionally) Npulse
+        ndims = 4 * max_peaks + 2
+    elif model_name == "exponential_2d":
+        # A, tau, u for each peak + alpha + sigma + (optionally) Npulse
+        ndims = 3 * max_peaks + 2
+    elif model_name == "emg_2d_with_baseline":
+        # A, tau, u, w for each peak + baseline + alpha + sigma + (optionally) Npulse
+        ndims = 4 * max_peaks + 3
+    elif model_name == "exponential_2d_with_baseline":
+        # A, tau, u for each peak + baseline + alpha + sigma + (optionally) Npulse
+        ndims = 3 * max_peaks + 3
     else:
         raise ValueError(f"Model {model_name} not recognized")
     
@@ -385,8 +565,15 @@ def get_param_names(model_name: str, max_peaks: int, fit_pulses: bool) -> list:
             names.append(rf"$w_{{{i+1}}}$")
     
     # Baseline offset (for baseline models)
-    if "baseline" in model_name:
+    if "baseline" in model_name and "2d" not in model_name:
         names.append(r"$B_{\text{offset}}$")
+    elif "baseline" in model_name and "2d" in model_name:
+        # For 2D models, baseline comes before spectral index
+        names.append(r"$B_{\text{offset}}$")
+    
+    # Spectral index (for 2D models)
+    if "2d" in model_name:
+        names.append(r"$\alpha$")
     
     # Sigma (noise)
     names.append(r"$\sigma$")
@@ -422,6 +609,15 @@ def get_sigma_index(model_name: str, max_peaks: int, fit_pulses: bool) -> int:
         return 2 * max_peaks + 2
     elif model_name == "periodic_exponential_with_baseline":
         return 2 * max_peaks + 3
+    # 2D models
+    elif model_name == "emg_2d":
+        return 4 * max_peaks + 1  # After alpha
+    elif model_name == "exponential_2d":
+        return 3 * max_peaks + 1  # After alpha
+    elif model_name == "emg_2d_with_baseline":
+        return 4 * max_peaks + 2  # After baseline and alpha
+    elif model_name == "exponential_2d_with_baseline":
+        return 3 * max_peaks + 2  # After baseline and alpha
     else:
         raise ValueError(f"Model {model_name} not recognized")
 
@@ -443,3 +639,29 @@ def get_npulse_index(model_name: str, max_peaks: int, fit_pulses: bool) -> Optio
     
     ndims = get_num_params(model_name, max_peaks, fit_pulses)
     return ndims - 1
+
+
+def get_spectral_index_location(model_name: str, max_peaks: int) -> Optional[int]:
+    """
+    Get the index of spectral index (alpha) parameter in theta.
+    
+    Args:
+        model_name: Name of the model
+        max_peaks: Maximum number of peaks
+    
+    Returns:
+        Index of alpha parameter or None if not a 2D model
+    """
+    if "2d" not in model_name:
+        return None
+    
+    if model_name == "emg_2d":
+        return 4 * max_peaks  # After A, tau, u, w
+    elif model_name == "exponential_2d":
+        return 3 * max_peaks  # After A, tau, u
+    elif model_name == "emg_2d_with_baseline":
+        return 4 * max_peaks + 1  # After A, tau, u, w, baseline
+    elif model_name == "exponential_2d_with_baseline":
+        return 3 * max_peaks + 1  # After A, tau, u, baseline
+    else:
+        return None

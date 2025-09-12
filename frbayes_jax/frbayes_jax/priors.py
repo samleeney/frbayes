@@ -53,10 +53,11 @@ class FRBPriors:
             prior_bounds = {
                 'amplitude': {'min': 0.001, 'max': 10.0},
                 'tau': {'min': 0.001, 'max': 10.0},
-                'u': {'min': -5.0, 'max': 10.0},
+                'u': {'min': 0.0, 'max': 4.0},  # Should be set to actual time range
                 'width': {'min': 0.001, 'max': 5.0},
                 'baseline': {'min': -1.0, 'max': 1.0},
                 'log_sigma': {'min': jnp.log(0.0001), 'max': jnp.log(2.0)},
+                'spectral_index': {'min': -3.0, 'max': 1.0},  # Typical range for FRBs
             }
         self.prior_bounds = prior_bounds
         
@@ -73,6 +74,15 @@ class FRBPriors:
             self.ndims = 2 * max_peaks + 3  # A, tau for each peak + u0 + period + sigma
         elif self.model_name == "periodic_exponential_with_baseline":
             self.ndims = 2 * max_peaks + 4  # A, tau for each peak + u0 + period + baseline + sigma
+        # 2D models with spectral index
+        elif self.model_name == "emg_2d":
+            self.ndims = 4 * max_peaks + 2  # A, tau, u, w for each peak + alpha + sigma
+        elif self.model_name == "exponential_2d":
+            self.ndims = 3 * max_peaks + 2  # A, tau, u for each peak + alpha + sigma
+        elif self.model_name == "emg_2d_with_baseline":
+            self.ndims = 4 * max_peaks + 3  # A, tau, u, w for each peak + baseline + alpha + sigma
+        elif self.model_name == "exponential_2d_with_baseline":
+            self.ndims = 3 * max_peaks + 3  # A, tau, u for each peak + baseline + alpha + sigma
         else:
             raise ValueError(f"Model {self.model_name} not recognized")
         
@@ -172,6 +182,15 @@ class FRBPriors:
             dist = distrax.Uniform(
                 low=self.prior_bounds['baseline']['min'],
                 high=self.prior_bounds['baseline']['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+        
+        # Spectral index (for 2D models) - uniform
+        if '2d' in self.model_name:
+            dist = distrax.Uniform(
+                low=self.prior_bounds['spectral_index']['min'],
+                high=self.prior_bounds['spectral_index']['max']
             )
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
             key_idx += 1

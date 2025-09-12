@@ -125,6 +125,82 @@ def preprocess_data(
     return final_wfall_output, pulse_profile_snr, time_axis
 
 
+def preprocess_data_2d(
+    data_file: str,
+    original_freq_res: float,
+    original_time_res: float,
+    desired_freq_res: float,
+    desired_time_res: float,
+    freq_min: float,
+    freq_max: float,
+    preprocessing_mode: str = "default"
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Preprocess FRB data from HDF5 file for 2D fitting.
+    
+    Args:
+        data_file: Path to HDF5 data file
+        original_freq_res: Original frequency resolution in Hz
+        original_time_res: Original time resolution in seconds
+        desired_freq_res: Desired frequency resolution in Hz
+        desired_time_res: Desired time resolution in seconds
+        freq_min: Minimum frequency in MHz
+        freq_max: Maximum frequency in MHz
+        preprocessing_mode: "default", "paper", or "raw"
+    
+    Returns:
+        Tuple of (downsampled_wfall_2d, time_axis, freq_axis, noise_per_channel)
+    """
+    # Load data from HDF5 file
+    with h5py.File(data_file, 'r') as f:
+        wfall = f['waterfall'][:]
+    
+    if preprocessing_mode == "raw":
+        # No NaN replacement, no downsampling
+        final_wfall_2d = wfall
+        final_time_res_for_axis = original_time_res
+        final_freq_res_for_axis = original_freq_res
+        
+    else:
+        # RFI Mitigation
+        if preprocessing_mode == "paper":
+            # Replace NaN with off-burst median
+            off_burst_time_bins = int(wfall.shape[1] * 0.1)
+            off_burst_data = wfall[:, :off_burst_time_bins]
+            off_burst_median = np.nanmedian(off_burst_data)
+            wfall[np.isnan(wfall)] = off_burst_median
+        else:  # default
+            # Replace NaN with 0
+            wfall[np.isnan(wfall)] = 0
+        
+        # Calculate downsampling factors
+        factor_freq = int(desired_freq_res / original_freq_res)
+        factor_time = int(desired_time_res / original_time_res)
+        
+        # Downsample
+        wfall_downsampled = downsample(wfall, factor_time, factor_freq)
+        final_wfall_2d = wfall_downsampled
+        final_time_res_for_axis = desired_time_res
+        final_freq_res_for_axis = desired_freq_res
+    
+    # Generate axes
+    num_freq_bins, num_time_bins = final_wfall_2d.shape
+    time_axis = np.arange(num_time_bins) * final_time_res_for_axis
+    
+    # Create frequency axis (assuming linear spacing)
+    freq_axis = np.linspace(freq_min, freq_max, num_freq_bins)
+    
+    # Estimate noise per channel from off-pulse region
+    off_pulse_bins = int(num_time_bins * 0.1)
+    noise_per_channel = np.std(final_wfall_2d[:, :off_pulse_bins], axis=1)
+    
+    # Handle zero or NaN noise
+    noise_per_channel[noise_per_channel == 0] = 1e-9
+    noise_per_channel[np.isnan(noise_per_channel)] = 1e-9
+    
+    return final_wfall_2d, time_axis, freq_axis, noise_per_channel
+
+
 def simulate_frb_data(
     model_func: callable,
     theta: jnp.ndarray,
