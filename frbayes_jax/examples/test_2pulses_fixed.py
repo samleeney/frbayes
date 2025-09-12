@@ -3,6 +3,7 @@ Test with simulated data: 2 pulses with fixed number of pulses.
 """
 import os
 import sys
+from datetime import datetime
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -73,9 +74,9 @@ def main():
     plt.title('Simulated Data: 2 Pulses (Fixed)')
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig('test_2pulses_fixed_data.png', dpi=150, bbox_inches='tight')
+    plt.savefig('results/test_2pulses_fixed_data.png', dpi=150, bbox_inches='tight')
     plt.close()
-    print("Data plot saved to test_2pulses_fixed_data.png")
+    print("Data plot saved to results/test_2pulses_fixed_data.png")
     
     # Set up prior bounds (using the user's requested wide priors)
     prior_bounds = {
@@ -116,8 +117,9 @@ def main():
     
     print("\nNested sampling completed.")
     
-    # Create output directory
-    output_dir = "results_2pulses_fixed"
+    # Create output directory with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"results/results_2pulses_fixed_{timestamp}"
     os.makedirs(output_dir, exist_ok=True)
     
     # Get parameter names

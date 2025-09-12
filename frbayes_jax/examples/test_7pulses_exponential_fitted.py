@@ -1,9 +1,10 @@
 """
-Test with simulated data: 7 pulses with fitted number of pulses.
+Test with simulated data: 7 pulses with fitted number of pulses using exponential model.
 This is a simplified test case to verify the model can handle multi-pulse signals.
 """
 import os
 import sys
+from datetime import datetime
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -13,26 +14,27 @@ import anesthetic
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from frbayes_jax.models import emg_model, get_model_function, get_param_names
+from frbayes_jax.models import exponential_model, get_model_function, get_param_names
 from frbayes_jax.data import simulate_frb_data
 from frbayes_jax.sampling import run_nested_sampling
 
 
 def main():
     """
-    Test nested sampling with 7 pulses, fitting the number.
+    Test nested sampling with 7 pulses, fitting the number, using exponential model.
     """
     print("="*60)
-    print("TEST: 7 PULSES WITH FITTED NUMBER")
+    print("TEST: 7 PULSES WITH FITTED NUMBER (EXPONENTIAL MODEL)")
     print("="*60)
     
     # Settings
-    model_name = "emg"
+    model_name = "exponential"
     max_peaks = 10  # Allow up to 10 peaks to test model selection
     fit_pulses = True  # Fit number of pulses
     
-    # True parameters for 7 EMG pulses - STRONGER AND WELL SEPARATED
+    # True parameters for 7 exponential pulses - STRONGER AND WELL SEPARATED
     # Arranged with sorted arrival times to match our prior
+    # Note: exponential model has no width parameter
     true_params_7peaks = jnp.array([
         # Amplitudes - ALL STRONG for good SNR
         1.5, 1.3, 1.1, 0.9, 0.7, 0.5, 0.4,
@@ -40,8 +42,6 @@ def main():
         0.35, 0.3, 0.4, 0.25, 0.32, 0.28, 0.22,
         # Arrival times (SORTED and WELL SEPARATED!)
         0.5, 1.2, 1.9, 2.6, 3.3, 4.0, 4.7,
-        # Widths (varying widths)
-        0.10, 0.12, 0.08, 0.15, 0.11, 0.09, 0.13,
         # Sigma (REDUCED noise for better SNR)
         0.03
     ])
@@ -50,8 +50,7 @@ def main():
     print("  Amplitudes:", true_params_7peaks[0:7])
     print("  Tau values:", true_params_7peaks[7:14])
     print("  Arrival times (sorted):", true_params_7peaks[14:21])
-    print("  Widths:", true_params_7peaks[21:28])
-    print(f"  Sigma: {true_params_7peaks[28]:.3f}")
+    print(f"  Sigma: {true_params_7peaks[21]:.3f}")
     print(f"  True Npulse: 7")
     
     # Generate time array and data
@@ -89,17 +88,16 @@ def main():
     
     # Plot individual pulses
     for i in range(7):
-        single_pulse_params = jnp.zeros(29)  # 7*4 + 1 = 29
+        single_pulse_params = jnp.zeros(22)  # 7*3 + 1 = 22
         single_pulse_params = single_pulse_params.at[0].set(true_params_7peaks[i])  # Amplitude
         single_pulse_params = single_pulse_params.at[7].set(true_params_7peaks[7+i])  # Tau
         single_pulse_params = single_pulse_params.at[14].set(true_params_7peaks[14+i])  # u
-        single_pulse_params = single_pulse_params.at[21].set(true_params_7peaks[21+i])  # w
         single_pulse = model_func_7peaks(t, single_pulse_params, 7, False)
         plt.plot(t_np, np.array(single_pulse), '--', alpha=0.4, label=f'Pulse {i+1}')
     
     plt.xlabel('Time')
     plt.ylabel('Signal')
-    plt.title('Simulated Data: 7 Pulses (Fitted Number)')
+    plt.title('Simulated Data: 7 Pulses (Fitted Number, Exponential Model)')
     plt.legend(loc='upper right', fontsize=7, ncol=2)
     plt.grid(True, alpha=0.3)
     
@@ -108,24 +106,23 @@ def main():
     residuals = data_np - np.array(true_model)
     plt.plot(t_np, residuals, 'b.', alpha=0.5, markersize=2)
     plt.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-    plt.axhline(y=true_params_7peaks[28], color='r', linestyle='--', alpha=0.5, label=f'±σ = ±{true_params_7peaks[28]:.3f}')
-    plt.axhline(y=-true_params_7peaks[28], color='r', linestyle='--', alpha=0.5)
+    plt.axhline(y=true_params_7peaks[21], color='r', linestyle='--', alpha=0.5, label=f'±σ = ±{true_params_7peaks[21]:.3f}')
+    plt.axhline(y=-true_params_7peaks[21], color='r', linestyle='--', alpha=0.5)
     plt.xlabel('Time')
     plt.ylabel('Residuals')
     plt.legend()
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('test_7pulses_fitted_data.png', dpi=150, bbox_inches='tight')
+    plt.savefig('results/test_7pulses_exponential_fitted_data.png', dpi=150, bbox_inches='tight')
     plt.close()
-    print("Data plot saved to test_7pulses_fitted_data.png")
+    print("Data plot saved to results/test_7pulses_exponential_fitted_data.png")
     
     # Set up prior bounds - CONSTRAINED to prevent overfitting
     prior_bounds = {
         'amplitude': {'min': 0.2, 'max': 1.8},  # Min 0.2 to avoid tiny noise fits
         'tau': {'min': 0.15, 'max': 0.5},  # Narrowed to match true range
         'u': {'min': 0.0, 'max': 5.5},  # Match data range [0, 5.5]
-        'width': {'min': 0.06, 'max': 0.20},  # Narrowed range
         'log_sigma': {'min': jnp.log(0.02), 'max': jnp.log(0.08)}  # Narrowed around true value 0.03
     }
     
@@ -142,14 +139,14 @@ def main():
             print(f"    sigma: [{np.exp(bounds['min']):.3f}, {np.exp(bounds['max']):.3f}]")
     
     # Calculate proper nested sampling parameters
-    # When fitting Npulse with max_peaks=10: 10*(A, tau, u, w) + sigma + Npulse = 40 + 1 + 1 = 42
-    ndims = 42
+    # When fitting Npulse with max_peaks=10: 10*(A, tau, u) + sigma + Npulse = 30 + 1 + 1 = 32
+    ndims = 32
     
     # IMPORTANT: DO NOT CHANGE THESE HYPERPARAMETERS
     # These are the standard settings we always use for consistent performance
-    num_live_points = ndims * 25  # 1050 (25 × 42)
-    num_delete = num_live_points // 2  # 525
-    num_inner_steps = ndims * 7  # 294 (7 × 42)
+    num_live_points = ndims * 25  # 800 (25 × 32)
+    num_delete = num_live_points // 2  # 400
+    num_inner_steps = ndims * 7  # 224 (7 × 32)
     
     print(f"\nSampling parameters:")
     print(f"  Dimensions: {ndims}")
@@ -173,8 +170,9 @@ def main():
     
     print("\nNested sampling completed.")
     
-    # Create output directory
-    output_dir = "results_7pulses_fitted"
+    # Create output directory with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"results/results_7pulses_exponential_fitted_{timestamp}"
     os.makedirs(output_dir, exist_ok=True)
     
     # Get parameter names

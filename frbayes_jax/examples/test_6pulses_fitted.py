@@ -4,6 +4,7 @@ This is a challenging test case to verify the model can handle complex multi-pul
 """
 import os
 import sys
+from datetime import datetime
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -116,9 +117,9 @@ def main():
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('test_6pulses_fitted_data.png', dpi=150, bbox_inches='tight')
+    plt.savefig('results/test_6pulses_fitted_data.png', dpi=150, bbox_inches='tight')
     plt.close()
-    print("Data plot saved to test_6pulses_fitted_data.png")
+    print("Data plot saved to results/test_6pulses_fitted_data.png")
     
     # Set up prior bounds (wider to accommodate 6 pulses)
     prior_bounds = {
@@ -173,8 +174,9 @@ def main():
     
     print("\nNested sampling completed.")
     
-    # Create output directory
-    output_dir = "results_6pulses_fitted"
+    # Create output directory with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"results/results_6pulses_fitted_{timestamp}"
     os.makedirs(output_dir, exist_ok=True)
     
     # Get parameter names
