@@ -38,11 +38,7 @@ desired_freq_res = 3.125e6
 freq_min = 400.0
 freq_max = 800.0
 
-print(f"Loading and preprocessing data from {data_file}")
-print(f"Using paper preprocessing mode:")
-print(f"  Original resolution: {original_time_res*1000:.3f} ms, {original_freq_res/1e6:.3f} MHz")
-print(f"  Target resolution: {desired_time_res*1000:.3f} ms, {desired_freq_res/1e6:.3f} MHz")
-print(f"  Frequency range: {freq_min}-{freq_max} MHz")
+print(f"Loading and preprocessing data...")
 
 # Use the paper preprocessing function
 wfall_downsampled, pulse_profile_snr, time_axis = preprocess_data(
@@ -56,10 +52,6 @@ wfall_downsampled, pulse_profile_snr, time_axis = preprocess_data(
     preprocessing_mode="paper"
 )
 
-print(f"\nPreprocessed data shape:")
-print(f"  Waterfall: {wfall_downsampled.shape}")
-print(f"  Profile: {pulse_profile_snr.shape}")
-print(f"  Time axis: {time_axis.shape}, range: [{time_axis[0]:.3f}, {time_axis[-1]:.3f}] s")
 
 profile = pulse_profile_snr
 t = time_axis
@@ -70,14 +62,7 @@ if len(profile) > target_points:
     downsample_factor = len(profile) // target_points
     profile = profile[::downsample_factor]
     t = t[::downsample_factor]
-    print(f"\nDownsampled for efficiency to {len(profile)} points")
 
-print(f"\nData statistics after preprocessing:")
-print(f"  Min S/N: {np.min(profile):.4f}")
-print(f"  Max S/N: {np.max(profile):.4f}")
-print(f"  Mean S/N: {np.mean(profile):.4f}")
-print(f"  Std S/N: {np.std(profile):.4f}")
-print(f"  Time resolution: {(t[1]-t[0])*1000:.2f} ms")
 
 # Plot the preprocessed data
 plt.figure(figsize=(12, 4))
@@ -88,7 +73,7 @@ plt.title('FRB 20191221A - Paper Preprocessing (S/N)')
 plt.grid(True, alpha=0.3)
 plt.savefig('frb_paper_preprocessed_profile.png', dpi=150, bbox_inches='tight')
 plt.close()
-print("Saved preprocessed profile to frb_paper_preprocessed_profile.png")
+print("Saved preprocessed profile")
 
 # Calculate dimensions
 ndims = 3 * max_peaks + 1  # A, tau, u for each peak + sigma
@@ -98,16 +83,7 @@ if fit_pulses:
 
 num_live_points = ndims * 25
 
-print(f"\n{'='*60}")
-print(f"RUNNING ANALYSIS")
-print(f"{'='*60}")
-print(f"  Model: {model_name}")
-print(f"  Pulse range: [{min_peaks}, {max_peaks}]")
-print(f"  Dimensions: {ndims}")
-print(f"  Live points: {num_live_points}")
-print(f"  Delete points: {num_live_points // 2}")
-print(f"  MCMC steps: {ndims * 5}")
-print(f"  Data points: {len(profile)}")
+print(f"Running nested sampling ({num_live_points} live points, {min_peaks}-{max_peaks} pulses)...")
 
 # Custom prior bounds to reduce baseline degeneracy
 prior_bounds = {
@@ -132,7 +108,6 @@ ns_params = {
 t_normalized = (t - t[0]) / (t[-1] - t[0])
 
 # Run nested sampling
-print("\nStarting nested sampling...")
 final_state = run_nested_sampling(
     model_name=model_name,
     data=profile,
@@ -143,7 +118,7 @@ final_state = run_nested_sampling(
     **ns_params
 )
 
-print("\n✓ Nested sampling completed!")
+print("Nested sampling completed")
 
 # Get parameter names
 param_names_latex = get_param_names(model_name, max_peaks, fit_pulses)
@@ -166,7 +141,7 @@ chains_dir = 'chains'
 os.makedirs(chains_dir, exist_ok=True)
 chains_file = os.path.join(chains_dir, f'nested_samples_{min_peaks}to{max_peaks}peaks.csv')
 nested_samples.to_csv(chains_file)
-print(f"Saved NestedSamples to {chains_file}")
+print("Saved chains to CSV")
 
 # Process results
 logL = final_state.loglikelihood
@@ -179,8 +154,6 @@ if fit_pulses:
     npulse_values = particles_valid[:, -1]
     pulse_mask = (npulse_values >= min_peaks) & (npulse_values <= max_peaks)
     if np.any(pulse_mask):
-        print(f"\nFiltering results to {min_peaks} ≤ Npulse ≤ {max_peaks}")
-        print(f"  Valid samples: {np.sum(pulse_mask)} / {len(pulse_mask)}")
         logL_valid = logL_valid[pulse_mask]
         particles_valid = particles_valid[pulse_mask]
 
@@ -190,7 +163,7 @@ best_fit = particles_valid[best_idx]
 fitted_npulse = best_fit[-1] if fit_pulses else max_peaks
 fitted_npulse_rounded = int(np.round(fitted_npulse))
 
-print(f"\nFitted number of pulses: {fitted_npulse:.2f} ≈ {fitted_npulse_rounded}")
+print(f"Fitted {fitted_npulse_rounded} pulses (log evidence: {np.max(logL_valid):.2f})")
 
 # Save results
 results_dict = {
@@ -205,26 +178,20 @@ results_dict = {
 }
 
 np.savez(f'frb_paper_results_{min_peaks}to{max_peaks}peaks.npz', **results_dict)
-print(f"Saved results to frb_paper_results_{min_peaks}to{max_peaks}peaks.npz")
 
 # ============================================================
 # PART 2: RUN run_analysis_clean.py
 # ============================================================
 
-print(f"\n{'='*60}")
-print("GENERATING ANALYSIS PLOTS")
-print(f"{'='*60}")
 
 # Load chains using anesthetic.read_csv
-print(f"\nLoading chains from {chains_file}")
 samples = read_csv(chains_file)
-print(f"  Loaded {len(samples)} samples")
 
 output_dir = 'analysis_results'
 os.makedirs(output_dir, exist_ok=True)
 
 # 1. Corner plot
-print("\n1. Creating corner plot...")
+print("Creating corner plot...")
 
 # Select parameters to plot
 params_to_plot = []
@@ -248,10 +215,9 @@ fig.tight_layout()
 output_file = os.path.join(output_dir, "corner_plot.png")
 fig.savefig(output_file, dpi=150, bbox_inches='tight')
 plt.close()
-print(f"  Saved to {output_file}")
 
 # 2. Npulse distribution
-print("\n2. Creating Npulse distribution...")
+print("Creating Npulse distribution...")
 fig, ax = plt.subplots(figsize=(8, 6))
 
 npulse_data = samples['N__text_pulse']
@@ -286,10 +252,9 @@ output_file = os.path.join(output_dir, "npulse_distribution.png")
 fig.tight_layout()
 fig.savefig(output_file, dpi=150, bbox_inches='tight')
 plt.close(fig)
-print(f"  Saved to {output_file}")
 
 # 3. Functional posterior using fgivenx
-print("\n3. Creating functional posterior plot...")
+print("Creating functional posterior...")
 
 model_func = get_model_function(model_name)
 
@@ -317,7 +282,6 @@ param_cols = [col for col in samples_subset.columns
 fig, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
 
 # Plot contours
-print("  Plotting functional posterior contours...")
 plot_contours(
     model_wrapper,
     t,
@@ -336,7 +300,6 @@ axes[0].set_title('Functional Posterior', fontsize=14)
 axes[0].grid(True, alpha=0.3)
 
 # Plot lines
-print("  Plotting model realizations...")
 plot_lines(
     model_wrapper,
     t,
@@ -360,9 +323,5 @@ plt.tight_layout()
 output_file = os.path.join(output_dir, "functional_posterior.png")
 fig.savefig(output_file, dpi=150, bbox_inches='tight')
 plt.close()
-print(f"  Saved to {output_file}")
 
-print(f"\n{'='*60}")
-print("✓ ANALYSIS COMPLETE")
-print(f"All plots saved to {output_dir}/")
-print(f"{'='*60}\n")
+print(f"Analysis complete. Plots saved to {output_dir}/")
