@@ -24,7 +24,7 @@ from frbayes_jax.models import get_model_function, get_param_names
 # Configuration
 model_name = 'exponential_with_baseline'
 min_peaks = 1
-max_peaks = 12
+max_peaks = 15
 fit_pulses = True
 
 # Data file paths
@@ -81,7 +81,7 @@ ndims += 1  # baseline
 if fit_pulses:
     ndims += 1  # Npulse
 
-num_live_points = ndims * 25
+num_live_points = ndims * 25  # Standard recommendation for memory efficiency
 
 print(f"Running nested sampling ({num_live_points} live points, {min_peaks}-{max_peaks} pulses)...")
 
@@ -90,7 +90,7 @@ prior_bounds = {
     'amplitude': {'min': 0, 'max': 50},
     'tau': {'min': 0.001, 'max': 0.5},
     'u': {'min': 0, 'max': 1},
-    'baseline': {'min': -0.5, 'max': 0},  # Negative only to avoid degeneracy
+    'baseline': {'min': -1.0, 'max': 1.0},  # Widened range for y-axis shift
     'log_sigma': {'min': np.log(0.1), 'max': np.log(2.0)},
     'npulse': {'min': min_peaks, 'max': max_peaks}
 }
@@ -99,7 +99,7 @@ prior_bounds = {
 ns_params = {
     'num_live_points': num_live_points,
     'num_delete': num_live_points // 2,
-    'num_inner_steps': ndims * 5,
+    'num_inner_steps': ndims * 20,  # Doubled for better MCMC mixing
     'log_tolerance': -3.0,
     'seed': 42
 }
