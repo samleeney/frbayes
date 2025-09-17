@@ -80,5 +80,3 @@ archive/
 *.gif
 
 # Markdown files (except README)
-*.md
-!README.md
