@@ -9,7 +9,7 @@ import numpy as np
 from typing import Dict, Tuple, Optional, Callable
 import tqdm
 from .models import get_model_function, get_num_params, get_sigma_index, get_param_names, get_spectral_index_location
-from .priors import FRBPriors
+from .priors import FRBPriors, FRBPriors3D
 from blackjax.ns.base import NSInfo
 
 

@@ -225,3 +225,186 @@ class FRBPriors:
             samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
         
         return jnp.stack(samples, axis=-1)
+
+
+class FRBPriors3D(FRBPriors):
+    """
+    Prior system for 3D basis function models.
+    Extends FRBPriors to handle basis function coefficients.
+    """
+
+    def __init__(
+        self,
+        model_name: str,
+        max_peaks: int,
+        n_basis: int,
+        fit_pulses: bool,
+        prior_bounds: Optional[Dict] = None,
+        use_rfi_mitigation: bool = False
+    ):
+        """
+        Initialize 3D priors.
+
+        Args:
+            model_name: Name of the model ("emg_3d_basis" or "exponential_3d_basis")
+            max_peaks: Maximum number of peaks
+            n_basis: Number of basis functions
+            fit_pulses: Whether to fit the number of pulses
+            prior_bounds: Dictionary of prior bounds (including 'spectral_coeffs')
+            use_rfi_mitigation: Whether to include RFI mitigation parameter
+        """
+        self.n_basis = n_basis
+
+        # Set default bounds if not provided
+        if prior_bounds is None:
+            prior_bounds = {
+                'amplitude': {'min': 0.001, 'max': 10.0},
+                'tau': {'min': 0.001, 'max': 10.0},
+                'u': {'min': 0.0, 'max': 4.0},  # Should be set to actual time range
+                'width': {'min': 0.001, 'max': 5.0},
+                'log_sigma': {'min': jnp.log(0.0001), 'max': jnp.log(2.0)},
+                'spectral_coeffs': {'min': -2.0, 'max': 2.0},  # For basis coefficients
+            }
+
+        # Initialize parent class with dummy model name (will override ndims)
+        super().__init__("emg", max_peaks, fit_pulses, prior_bounds, use_rfi_mitigation)
+
+        # Override model name and ndims calculation for 3D models
+        self.model_name = model_name
+
+        # Calculate correct number of dimensions for 3D models
+        if self.model_name == "emg_3d_basis":
+            # A, tau, u, w for each peak + c0...c{K-1} + sigma
+            self.ndims = 4 * max_peaks + n_basis + 1
+        elif self.model_name == "exponential_3d_basis":
+            # A, tau, u for each peak + c0...c{K-1} + sigma
+            self.ndims = 3 * max_peaks + n_basis + 1
+        else:
+            raise ValueError(f"Model {self.model_name} not recognized as a 3D model")
+
+        if fit_pulses:
+            self.ndims += 1
+
+        if use_rfi_mitigation:
+            self.ndims += 1
+
+    def sample_from_prior(self, rng_key: jax.random.PRNGKey, n_samples: int = 1) -> jnp.ndarray:
+        """
+        Sample from priors including basis function coefficients.
+        """
+        samples = []
+        keys = jax.random.split(rng_key, self.ndims)
+        key_idx = 0
+
+        # Amplitudes - uniform
+        for i in range(self.max_peaks):
+            dist = distrax.Uniform(
+                low=self.prior_bounds['amplitude']['min'],
+                high=self.prior_bounds['amplitude']['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+
+        # Taus - uniform
+        for i in range(self.max_peaks):
+            dist = distrax.Uniform(
+                low=self.prior_bounds['tau']['min'],
+                high=self.prior_bounds['tau']['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+
+        # Arrival times (sorted for identifiability)
+        if self.max_peaks > 1:
+            # Sample uniform [0, 1] values
+            u_samples_01 = []
+            for i in range(self.max_peaks):
+                dist = distrax.Uniform(low=0.0, high=1.0)
+                u_samples_01.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+                key_idx += 1
+
+            # Stack and apply transform to each sample
+            u_01_stacked = jnp.stack(u_samples_01, axis=-1)  # Shape: (n_samples, max_peaks)
+
+            # Apply transform to each sample using vmap
+            u_sorted_01 = jax.vmap(forced_identifiability_transform)(u_01_stacked)
+
+            # Rescale to [u_min, u_max]
+            u_min = self.prior_bounds['u']['min']
+            u_max = self.prior_bounds['u']['max']
+            u_sorted = u_min + (u_max - u_min) * u_sorted_01
+
+            # Split back into individual samples for consistency with rest of code
+            for i in range(self.max_peaks):
+                samples.append(u_sorted[:, i])
+        else:
+            # Single peak - no sorting needed
+            dist = distrax.Uniform(
+                low=self.prior_bounds['u']['min'],
+                high=self.prior_bounds['u']['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+
+        # Widths (for EMG) - uniform
+        if 'emg' in self.model_name:
+            for i in range(self.max_peaks):
+                dist = distrax.Uniform(
+                    low=self.prior_bounds['width']['min'],
+                    high=self.prior_bounds['width']['max']
+                )
+                samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+                key_idx += 1
+
+        # Basis function coefficients - uniform
+        for k in range(self.n_basis):
+            # Use decreasing prior range for higher order terms if desired
+            # This provides natural regularization
+            if k == 0:
+                # Zeroth order coefficient - wider range
+                coeff_min = self.prior_bounds['spectral_coeffs']['min']
+                coeff_max = self.prior_bounds['spectral_coeffs']['max']
+            else:
+                # Higher order - progressively narrower range
+                scale = 1.0 / (k + 1)  # Or use exponential decay: 0.5 ** k
+                coeff_min = self.prior_bounds['spectral_coeffs']['min'] * scale
+                coeff_max = self.prior_bounds['spectral_coeffs']['max'] * scale
+
+            dist = distrax.Uniform(low=coeff_min, high=coeff_max)
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+
+        # Baseline - uniform
+        baseline_bounds = self.prior_bounds.get('baseline', {'min': 0.0, 'max': 0.5})
+        dist = distrax.Uniform(
+            low=baseline_bounds['min'],
+            high=baseline_bounds['max']
+        )
+        samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+        key_idx += 1
+
+        # Sigma - log-uniform (sample in log space, then exp)
+        log_dist = distrax.Uniform(
+            low=self.prior_bounds['log_sigma']['min'],
+            high=self.prior_bounds['log_sigma']['max']
+        )
+        log_sigma = log_dist.sample(seed=keys[key_idx], sample_shape=(n_samples,))
+        samples.append(jnp.exp(log_sigma))
+        key_idx += 1
+
+        # Npulse (if fitted) - uniform integer
+        if self.fit_pulses:
+            dist = distrax.Uniform(low=1.0, high=float(self.max_peaks))
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+            key_idx += 1
+
+        # Anomaly probability (if using RFI mitigation) - log-uniform
+        if self.use_rfi_mitigation:
+            log_p_bounds = self.prior_bounds.get('log_anomaly_prob', {'min': -10.0, 'max': -0.1})
+            dist = distrax.Uniform(
+                low=log_p_bounds['min'],
+                high=log_p_bounds['max']
+            )
+            samples.append(dist.sample(seed=keys[key_idx], sample_shape=(n_samples,)))
+
+        return jnp.stack(samples, axis=-1)

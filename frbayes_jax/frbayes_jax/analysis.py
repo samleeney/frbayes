@@ -3,7 +3,7 @@ Analysis and visualization utilities for FRBayes JAX.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from anesthetic import read_chains, make_2d_axes, make_1d_axes
+from anesthetic import read_chains, make_2d_axes, make_1d_axes, NestedSamples, read_csv as anesthetic_read_csv
 from fgivenx import plot_contours, plot_lines
 import jax.numpy as jnp
 from typing import Dict, List, Optional, Tuple
@@ -36,7 +36,7 @@ def plot_corner(
 ) -> None:
     """
     Create corner plot using anesthetic.
-    
+
     Args:
         chain_file: Path to chain file (without _dead-birth.txt)
         param_names: List of parameter names
@@ -44,12 +44,17 @@ def plot_corner(
         output_dir: Directory to save plots
         params_to_plot: Indices of parameters to plot (None = all)
     """
-    # Load chains
-    chains = read_chains(chain_file, columns=param_names)
+    # Load chains - handle both old format and CSV
+    if chain_file.endswith('.csv'):
+        chains = anesthetic_read_csv(chain_file)
+    else:
+        chains = read_chains(chain_file, columns=param_names)
     
     # Remove any NaN or Inf values
     import numpy as np
-    mask = ~(chains.isnull().any(axis=1) | np.isinf(chains).any(axis=1))
+    # Select only numeric columns for inf check
+    numeric_chains = chains.select_dtypes(include=[np.number])
+    mask = ~(numeric_chains.isnull().any(axis=1) | np.isinf(numeric_chains).any(axis=1))
     chains = chains[mask]
     
     if len(chains) == 0:
@@ -58,12 +63,24 @@ def plot_corner(
     
     # Select parameters to plot
     if params_to_plot is not None:
-        params_subset = [param_names[i] for i in params_to_plot]
+        # When loading from CSV, columns are multi-index tuples
+        if chain_file.endswith('.csv'):
+            # Get the actual column names from chains
+            all_cols = [col for col in chains.columns if not isinstance(col, tuple) or col[0] not in ['logL', 'logL_birth', 'nlive']]
+            if not all_cols:  # If all columns are tuples
+                all_cols = [col for col in chains.columns if isinstance(col, tuple) and col[0] not in ['logL', 'logL_birth', 'nlive']]
+            params_subset = [all_cols[i] for i in params_to_plot if i < len(all_cols)]
+        else:
+            params_subset = [param_names[i] for i in params_to_plot]
     else:
-        params_subset = param_names
-    
+        if chain_file.endswith('.csv'):
+            # Filter out non-parameter columns
+            params_subset = [col for col in chains.columns if isinstance(col, tuple) and col[0] not in ['logL', 'logL_birth', 'nlive']][:12]
+        else:
+            params_subset = param_names
+
     # Create corner plot
-    fig, axes = make_2d_axes(params_subset, figsize=(10, 10), facecolor='w')
+    fig, axes = make_2d_axes(params_subset[:min(12, len(params_subset))], figsize=(10, 10), facecolor='w')
     
     # Plot with model-specific color
     color = MODEL_COLORS.get(model_name, "black")
@@ -104,12 +121,17 @@ def plot_functional_posterior(
         output_dir: Directory to save plots
         nsamples: Number of samples to use for plotting
     """
-    # Load chains
-    chains = read_chains(chain_file, columns=param_names)
+    # Load chains - handle both old format and CSV
+    if chain_file.endswith('.csv'):
+        chains = anesthetic_read_csv(chain_file)
+    else:
+        chains = read_chains(chain_file, columns=param_names)
     
     # Remove any NaN or Inf values
     import numpy as np
-    mask = ~(chains.isnull().any(axis=1) | np.isinf(chains).any(axis=1))
+    # Select only numeric columns for inf check
+    numeric_chains = chains.select_dtypes(include=[np.number])
+    mask = ~(numeric_chains.isnull().any(axis=1) | np.isinf(numeric_chains).any(axis=1))
     chains = chains[mask]
     
     if len(chains) == 0:
@@ -205,12 +227,17 @@ def plot_parameter_distributions(
         fit_pulses: Whether Npulse is fitted
         output_dir: Directory to save plots
     """
-    # Load chains
-    chains = read_chains(chain_file, columns=param_names)
+    # Load chains - handle both old format and CSV
+    if chain_file.endswith('.csv'):
+        chains = anesthetic_read_csv(chain_file)
+    else:
+        chains = read_chains(chain_file, columns=param_names)
     
     # Remove any NaN or Inf values
     import numpy as np
-    mask = ~(chains.isnull().any(axis=1) | np.isinf(chains).any(axis=1))
+    # Select only numeric columns for inf check
+    numeric_chains = chains.select_dtypes(include=[np.number])
+    mask = ~(numeric_chains.isnull().any(axis=1) | np.isinf(numeric_chains).any(axis=1))
     chains = chains[mask]
     
     if len(chains) == 0:

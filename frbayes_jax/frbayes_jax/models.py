@@ -448,10 +448,10 @@ def exponential_model_2d_with_baseline(t: jnp.ndarray, freq: jnp.ndarray, theta:
 def get_model_function(model_name: str) -> Callable:
     """
     Get the model function for a given model name.
-    
+
     Args:
         model_name: Name of the model
-    
+
     Returns:
         JIT-compiled model function
     """
@@ -466,24 +466,28 @@ def get_model_function(model_name: str) -> Callable:
         "emg_2d": emg_model_2d,
         "exponential_2d": exponential_model_2d,
         "emg_2d_with_baseline": emg_model_2d_with_baseline,
-        "exponential_2d_with_baseline": exponential_model_2d_with_baseline
+        "exponential_2d_with_baseline": exponential_model_2d_with_baseline,
+        # 3D basis function models
+        "emg_3d_basis": emg_model_3d_basis,
+        "exponential_3d_basis": exponential_model_3d_basis
     }
-    
+
     if model_name not in models:
         raise ValueError(f"Model {model_name} not recognized. Available: {list(models.keys())}")
-    
+
     return models[model_name]
 
 
-def get_num_params(model_name: str, max_peaks: int, fit_pulses: bool) -> int:
+def get_num_params(model_name: str, max_peaks: int, fit_pulses: bool, n_basis: int = 5) -> int:
     """
     Get the number of parameters for a given model.
-    
+
     Args:
         model_name: Name of the model
         max_peaks: Maximum number of peaks
         fit_pulses: Whether to fit the number of pulses
-    
+        n_basis: Number of basis functions for 3D models (default: 5)
+
     Returns:
         Number of parameters
     """
@@ -518,37 +522,45 @@ def get_num_params(model_name: str, max_peaks: int, fit_pulses: bool) -> int:
     elif model_name == "exponential_2d_with_baseline":
         # A, tau, u for each peak + baseline + alpha + sigma + (optionally) Npulse
         ndims = 3 * max_peaks + 3
+    # 3D basis function models
+    elif model_name == "emg_3d_basis":
+        # A, tau, u, w for each peak + c0...c{K-1} + sigma + (optionally) Npulse
+        ndims = 4 * max_peaks + n_basis + 1
+    elif model_name == "exponential_3d_basis":
+        # A, tau, u for each peak + c0...c{K-1} + sigma + (optionally) Npulse
+        ndims = 3 * max_peaks + n_basis + 1
     else:
         raise ValueError(f"Model {model_name} not recognized")
-    
+
     if fit_pulses:
         ndims += 1
-    
+
     return ndims
 
 
-def get_param_names(model_name: str, max_peaks: int, fit_pulses: bool) -> list:
+def get_param_names(model_name: str, max_peaks: int, fit_pulses: bool, n_basis: int = 5) -> list:
     """
     Get parameter names for a given model.
-    
+
     Args:
         model_name: Name of the model
         max_peaks: Maximum number of peaks
         fit_pulses: Whether to fit the number of pulses
-    
+        n_basis: Number of basis functions for 3D models
+
     Returns:
         List of parameter names in LaTeX format
     """
     names = []
-    
+
     # Amplitude parameters
     for i in range(max_peaks):
         names.append(rf"$A_{{{i+1}}}$")
-    
+
     # Tau parameters
     for i in range(max_peaks):
         names.append(rf"$\tau_{{{i+1}}}$")
-    
+
     # Model-specific location parameters
     if "periodic" in model_name:
         # For periodic models: u0 and period
@@ -558,30 +570,35 @@ def get_param_names(model_name: str, max_peaks: int, fit_pulses: bool) -> list:
         # For non-periodic models: individual arrival times
         for i in range(max_peaks):
             names.append(rf"$u_{{{i+1}}}$")
-    
+
     # Width parameters (for EMG models)
     if "emg" in model_name and "periodic" not in model_name:
         for i in range(max_peaks):
             names.append(rf"$w_{{{i+1}}}$")
-    
+
     # Baseline offset (for baseline models)
     if "baseline" in model_name and "2d" not in model_name:
         names.append(r"$B_{\text{offset}}$")
     elif "baseline" in model_name and "2d" in model_name:
         # For 2D models, baseline comes before spectral index
         names.append(r"$B_{\text{offset}}$")
-    
+
     # Spectral index (for 2D models)
-    if "2d" in model_name:
+    if "2d" in model_name and "3d" not in model_name:
         names.append(r"$\alpha$")
-    
+
+    # Basis function coefficients (for 3D models)
+    if "3d_basis" in model_name:
+        for k in range(n_basis):
+            names.append(rf"$c_{{{k}}}$")
+
     # Sigma (noise)
     names.append(r"$\sigma$")
-    
+
     # Npulse (if fitted)
     if fit_pulses:
         names.append(r"$N_{\text{pulse}}$")
-    
+
     return names
 
 
@@ -644,17 +661,17 @@ def get_npulse_index(model_name: str, max_peaks: int, fit_pulses: bool) -> Optio
 def get_spectral_index_location(model_name: str, max_peaks: int) -> Optional[int]:
     """
     Get the index of spectral index (alpha) parameter in theta.
-    
+
     Args:
         model_name: Name of the model
         max_peaks: Maximum number of peaks
-    
+
     Returns:
         Index of alpha parameter or None if not a 2D model
     """
     if "2d" not in model_name:
         return None
-    
+
     if model_name == "emg_2d":
         return 4 * max_peaks  # After A, tau, u, w
     elif model_name == "exponential_2d":
@@ -665,3 +682,195 @@ def get_spectral_index_location(model_name: str, max_peaks: int) -> Optional[int
         return 3 * max_peaks + 1  # After A, tau, u, baseline
     else:
         return None
+
+
+def chebyshev_basis(freq: jnp.ndarray, k: int, freq_min: float, freq_max: float) -> jnp.ndarray:
+    """
+    Compute Chebyshev polynomial of order k for given frequency array.
+    Not JIT-compiled due to dynamic control flow based on k.
+
+    Args:
+        freq: Frequency array
+        k: Order of Chebyshev polynomial (0, 1, 2, ...)
+        freq_min: Minimum frequency for normalization
+        freq_max: Maximum frequency for normalization
+
+    Returns:
+        Chebyshev polynomial T_k evaluated at normalized frequencies
+    """
+    # Map frequency to [-1, 1]
+    x = 2 * (freq - freq_min) / (freq_max - freq_min) - 1
+
+    # Use recursive computation for numerical stability
+    # T_0(x) = 1
+    # T_1(x) = x
+    # T_n(x) = 2*x*T_{n-1}(x) - T_{n-2}(x)
+
+    if k == 0:
+        return jnp.ones_like(x)
+    elif k == 1:
+        return x
+    else:
+        # Use iterative computation for k >= 2
+        T_prev2 = jnp.ones_like(x)  # T_0
+        T_prev1 = x                  # T_1
+
+        for i in range(2, k + 1):
+            T_current = 2 * x * T_prev1 - T_prev2
+            T_prev2 = T_prev1
+            T_prev1 = T_current
+
+        return T_prev1
+
+
+def emg_model_3d_basis(t: jnp.ndarray, freq: jnp.ndarray, theta: jnp.ndarray,
+                       max_peaks: int, n_basis: int, fit_pulses: bool = False,
+                       ref_freq: float = 1400.0) -> jnp.ndarray:
+    """
+    3D EMG model using basis function decomposition with shared spectrum.
+    All pulses share the same spectral shape modeled by basis functions.
+
+    Args:
+        t: Time array
+        freq: Frequency array (MHz)
+        theta: Parameter array [A1,...,An, tau1,...,taun, u1,...,un, w1,...,wn,
+                               c0,...,c{K-1}, baseline, sigma, (Npulse)]
+               where c_k are the basis function coefficients
+        max_peaks: Maximum number of peaks
+        n_basis: Number of basis functions (K)
+        fit_pulses: Whether Npulse is included in theta
+        ref_freq: Reference frequency for amplitude scaling
+
+    Returns:
+        3D model prediction (freq, time)
+    """
+    # Extract temporal parameters
+    n_temporal = 4 * max_peaks  # A, tau, u, w for each peak
+    temporal_params = theta[:n_temporal]
+
+    # Extract spectral coefficients (shared for all pulses)
+    spectral_coeffs = theta[n_temporal:n_temporal + n_basis]
+
+    # Extract baseline
+    baseline_idx = n_temporal + n_basis
+    baseline = theta[baseline_idx]
+
+    # Extract sigma
+    sigma_idx = baseline_idx + 1
+    # sigma = theta[sigma_idx]  # Not used in model generation
+
+    # Optional: Npulse parameter
+    if fit_pulses:
+        npulse = jnp.round(theta[-1])
+        npulse = jnp.clip(npulse, 1, max_peaks)
+    else:
+        npulse = max_peaks
+
+    # Compute temporal model (1D) at reference frequency
+    A = temporal_params[:max_peaks]
+    tau = temporal_params[max_peaks:2*max_peaks]
+    u = temporal_params[2*max_peaks:3*max_peaks]
+    w = temporal_params[3*max_peaks:4*max_peaks]
+
+    temporal_model = jnp.zeros_like(t)
+    for i in range(max_peaks):
+        pulse_active = i < npulse
+        contribution = emg_pulse(t, A[i], tau[i], u[i], w[i])
+        temporal_model += jnp.where(pulse_active, contribution, 0.0)
+
+    # Compute spectral model using Chebyshev basis
+    freq_min, freq_max = jnp.min(freq), jnp.max(freq)
+    spectral_model = jnp.zeros_like(freq)
+
+    for k in range(n_basis):
+        basis_k = chebyshev_basis(freq, k, freq_min, freq_max)
+        spectral_model += spectral_coeffs[k] * basis_k
+
+    # Ensure positive spectral scaling using exponential
+    # This prevents negative values and provides smooth variation
+    spectral_model = jnp.exp(spectral_model)
+
+    # Normalize spectral model at reference frequency for interpretability
+    # Find closest frequency to ref_freq
+    ref_idx = jnp.argmin(jnp.abs(freq - ref_freq))
+    spectral_model = spectral_model / spectral_model[ref_idx]
+
+    # Combine: outer product gives (freq, time) array
+    model_3d = spectral_model[:, None] * temporal_model[None, :] + baseline
+
+    return model_3d
+
+
+def exponential_model_3d_basis(t: jnp.ndarray, freq: jnp.ndarray, theta: jnp.ndarray,
+                               max_peaks: int, n_basis: int, fit_pulses: bool = False,
+                               ref_freq: float = 1400.0) -> jnp.ndarray:
+    """
+    3D exponential model using basis function decomposition with shared spectrum.
+    All pulses share the same spectral shape modeled by basis functions.
+
+    Args:
+        t: Time array
+        freq: Frequency array (MHz)
+        theta: Parameter array [A1,...,An, tau1,...,taun, u1,...,un,
+                               c0,...,c{K-1}, baseline, sigma, (Npulse)]
+               where c_k are the basis function coefficients
+        max_peaks: Maximum number of peaks
+        n_basis: Number of basis functions (K)
+        fit_pulses: Whether Npulse is included in theta
+        ref_freq: Reference frequency for amplitude scaling
+
+    Returns:
+        3D model prediction (freq, time)
+    """
+    # Extract temporal parameters
+    n_temporal = 3 * max_peaks  # A, tau, u for each peak
+    temporal_params = theta[:n_temporal]
+
+    # Extract spectral coefficients (shared for all pulses)
+    spectral_coeffs = theta[n_temporal:n_temporal + n_basis]
+
+    # Extract baseline
+    baseline_idx = n_temporal + n_basis
+    baseline = theta[baseline_idx]
+
+    # Extract sigma
+    sigma_idx = baseline_idx + 1
+    # sigma = theta[sigma_idx]  # Not used in model generation
+
+    # Optional: Npulse parameter
+    if fit_pulses:
+        npulse = jnp.round(theta[-1])
+        npulse = jnp.clip(npulse, 1, max_peaks)
+    else:
+        npulse = max_peaks
+
+    # Compute temporal model (1D) at reference frequency
+    A = temporal_params[:max_peaks]
+    tau = temporal_params[max_peaks:2*max_peaks]
+    u = temporal_params[2*max_peaks:3*max_peaks]
+
+    temporal_model = jnp.zeros_like(t)
+    for i in range(max_peaks):
+        pulse_active = i < npulse
+        contribution = exponential_pulse(t, A[i], tau[i], u[i])
+        temporal_model += jnp.where(pulse_active, contribution, 0.0)
+
+    # Compute spectral model using Chebyshev basis
+    freq_min, freq_max = jnp.min(freq), jnp.max(freq)
+    spectral_model = jnp.zeros_like(freq)
+
+    for k in range(n_basis):
+        basis_k = chebyshev_basis(freq, k, freq_min, freq_max)
+        spectral_model += spectral_coeffs[k] * basis_k
+
+    # Ensure positive spectral scaling using exponential
+    spectral_model = jnp.exp(spectral_model)
+
+    # Normalize spectral model at reference frequency
+    ref_idx = jnp.argmin(jnp.abs(freq - ref_freq))
+    spectral_model = spectral_model / spectral_model[ref_idx]
+
+    # Combine: outer product gives (freq, time) array
+    model_3d = spectral_model[:, None] * temporal_model[None, :] + baseline
+
+    return model_3d
